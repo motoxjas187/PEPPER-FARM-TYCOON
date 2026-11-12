@@ -6,7 +6,7 @@
 <title>Pepper Farm Tycoon</title>
 <style>
 :root{--bg:#1d1410;--panel:#2c1f18;--gold:#ffc83d;--txt:#fff3e6;--mut:#c2a893;--green:#5cc43f;--red:#e5483b;--line:#4d3628}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;touch-action:none}
 #app{display:flex;flex-direction:column;height:100%;max-width:560px;margin:0 auto}
 #hud{display:flex;align-items:center;gap:5px;padding:8px 8px 4px}
@@ -151,7 +151,7 @@ function fresh(){const tiles={},put=(x,y,o)=>tiles[x+','+y]=o;
  return{v:2,land:['3,0','3,1'],coins:150,run:0,total:0,prest:0,up:Object.fromEntries(UP.map(u=>[u.id,0])),disc:1,res:0,seeds:V.map(()=>0),
   tiles,rate:0,t:Date.now(),seen:false,zip:'',zipAsked:false,wxOn:true,ob:75,st:{sold:0,fed:0,cross:0,lost:0}}}
 function load(){try{const r=localStorage.getItem(SAVE_KEY);if(!r)return null;const d=JSON.parse(r),f=fresh();
- if(!d.land){const nt={};for(const k in d.tiles){const[x,y]=k.split(',').map(Number);nt[(x+24)+','+y]=d.tiles[k]}d.tiles=nt;d.land=['3,0','3,1'];d.v=2}
+ if(!d.land&&d.tiles){const nt={};for(const k in d.tiles){const[x,y]=k.split(',').map(Number);nt[(x+24)+','+y]=d.tiles[k]}d.tiles=nt;d.land=['3,0','3,1'];d.v=2}
  return Object.assign(f,d,{up:Object.assign(f.up,d.up),st:Object.assign(f.st,d.st)})}catch(e){return null}}
 let S=load()||fresh();
 function save(){S.t=Date.now();S.rate=perSec();try{localStorage.setItem(SAVE_KEY,JSON.stringify(S))}catch(e){}}
@@ -437,9 +437,9 @@ function wxFx(now){const ty=WX.type;
 /* ---------------- input ---------------- */
 let tool='hand',pickK=null,selK=null,drag=null,cat=null;
 const CATS=[{id:'plant',name:'Planters',icon:'🌱',items:['bank','farm']},{id:'ranch',name:'Ranch',icon:'🐄',items:['barn']},{id:'proc',name:'Processing',icon:'🐝',items:['cross','sort']},{id:'logi',name:'Logistics',icon:'🛤️',items:['arm','split','store','compost']},{id:'sale',name:'Sales',icon:'🏪',items:['market','taste']},{id:'def',name:'Defense',icon:'🛡️',items:['spray']}];
-const HINTS={hand:'Drag to move the map, pinch to zoom. Tap a building to open it.',
+const HINTS={hand:'Drag to move the map, pinch to zoom. Tap or hold a building to open it.',
  belt:'Drag to lay belts (they point the way you drag). Use two fingers to move the map.',
- build:'Pick a category, then a building, then tap a tile or belt. Yellow arrow = its output.',
+ build:'Pick a category, then a building, then tap a tile. Hold a building button for info and stats.',
  rot:'Tap a belt or building to turn it clockwise.',
  erase:'Tap a belt or building to remove it (buildings refund 75%).'};
 function setTool(t){if(t===tool&&t!=='hand')t='hand';tool=t;if(t==='build'){cat=null;pickK=null}selK=null;document.querySelectorAll('.tb').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
@@ -454,10 +454,11 @@ cv.addEventListener('pointerdown',e=>{e.preventDefault();try{cv.setPointerCaptur
  if(ptrs.size>2)return;
  const[x,y]=cellOf(e);
  if(tool==='belt'&&owned(x,y)){gest={mode:'belt'};const k=K(x,y);drag={x,y};if(!S.tiles[k]){S.tiles[k]={k:'belt',d:S.lastD??1};rebuild()}return}
- gest={mode:'tap',sx:e.clientX,sy:e.clientY,cx:cam.x,cy:cam.y,x,y}});
+ gest={mode:'tap',sx:e.clientX,sy:e.clientY,cx:cam.x,cy:cam.y,x,y};const g=gest;
+ setTimeout(()=>{if(gest===g&&g.mode==='tap'&&ptrs.size===1){const t=S.tiles[K(x,y)];if(t&&t.k!=='belt'&&owned(x,y)){g.mode='done';if(navigator.vibrate)try{navigator.vibrate(15)}catch(_){}openSheet('b',K(x,y))}}},450)});
 cv.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});if(!gest)return;const r=cv.getBoundingClientRect();
  if(gest.mode==='pinch'&&ptrs.size>=2){const m=mid();zoom=Math.max(.45,Math.min(2.2,gest.z*m.d/gest.d));T=BASE*zoom;cam.x=gest.wx*T-(m.x-r.left);cam.y=gest.wy*T-(m.y-r.top);clampCam();return}
- if(gest.mode==='tap'||gest.mode==='pan'){const dx=e.clientX-gest.sx,dy=e.clientY-gest.sy;if(gest.mode==='tap'&&Math.abs(dx)+Math.abs(dy)>10)gest.mode='pan';
+ if(gest.mode==='tap'||gest.mode==='pan'){const dx=e.clientX-gest.sx,dy=e.clientY-gest.sy;if(gest.mode==='tap'&&Math.hypot(dx,dy)>18)gest.mode='pan';
   if(gest.mode==='pan'){cam.x=gest.cx-dx;cam.y=gest.cy-dy;clampCam()}return}
  if(gest.mode==='belt'&&drag){const[x,y]=cellOf(e);if(!inG(x,y))return;let g=0;
   while((drag.x!==x||drag.y!==y)&&g++<40){const dx=Math.sign(x-drag.x),dy=Math.sign(y-drag.y),nx=dx?drag.x+dx:drag.x,ny=dx?drag.y:drag.y+dy;if(!owned(nx,ny))break;beltStep(nx,ny)}}});
@@ -494,8 +495,12 @@ function renderPicker(){if(tool!=='build')return;let h;
  else{const c=CATS.find(x=>x.id===cat);h=`<button class="chip cat" data-cat=""><span>⬅️</span>Back<br><small>${c.name}</small></button>`+c.items.map(k=>{const co=bCost(k);
   return`<button class="chip ${k===pickK?'on':''} ${S.coins<co?'lock':''}" data-k="${k}"><span>${BT[k].icon}</span>${BT[k].name}<br>🪙${fmt(co)}</button>`}).join('')}
  $('#picker').innerHTML=h}
-$('#picker').addEventListener('click',e=>{const c=e.target.closest('[data-cat]');if(c){cat=c.dataset.cat||null;pickK=null;if(cat){const items=CATS.find(x=>x.id===cat).items;if(items.length===1)pickK=items[0]}renderPicker();return}
- const b=e.target.closest('[data-k]');if(!b)return;pickK=b.dataset.k;renderPicker();$('#hint').textContent='Tap a tile or belt to place '+BT[pickK].name+'. Tap 🏗️ Build again when done.'});
+let lpT=0,lpFired=false;
+$('#picker').addEventListener('pointerdown',e=>{const b=e.target.closest('[data-k]');lpFired=false;clearTimeout(lpT);if(!b)return;
+ lpT=setTimeout(()=>{lpFired=true;if(navigator.vibrate)try{navigator.vibrate(15)}catch(_){}openSheet('info',b.dataset.k)},450)});
+['pointerup','pointercancel','pointerleave'].forEach(ev=>$('#picker').addEventListener(ev,()=>clearTimeout(lpT)));
+$('#picker').addEventListener('click',e=>{if(lpFired){lpFired=false;return}const c=e.target.closest('[data-cat]');if(c){cat=c.dataset.cat||null;pickK=null;if(cat){const items=CATS.find(x=>x.id===cat).items;if(items.length===1)pickK=items[0]}renderPicker();return}
+ const b=e.target.closest('[data-k]');if(!b)return;pickK=b.dataset.k;renderPicker();$('#hint').textContent='Tap a tile or belt to place '+BT[pickK].name+'. Hold a building button for info.'});
 let tT=0;function toast(m){const t=$('#toast');t.textContent=m;t.style.opacity=1;clearTimeout(tT);tT=setTimeout(()=>t.style.opacity=0,2600)}
 let sheetKind=null,sheetArg=null;
 function openSheet(k,a){sheetKind=k;sheetArg=a;if(k==='b')selK=a;render();$('#ov').style.display='flex'}
@@ -532,6 +537,10 @@ function render(){const sh=$('#sheet');let h='';
   <p>🌦️ <b>Weather</b> follows your ZIP code's climate and changes every few minutes. Rain speeds growth but spreads bacteria; frost and storms slow it down. Hydroponic farms and warehouses are indoors and aren't affected. Tap the weather chip for details.</p>
   <p>⭐ <b>Prestige</b> widens every belt: 1 → 5 lanes.</p>
   <button class="buy wide" data-a="close">Start farming!</button>`}
+ else if(sheetKind==='info'){const k=sheetArg,b=BT[k],c=bCost(k),n=countOf(k),catN=(CATS.find(x=>x.items.includes(k))||{}).name||'';
+  h=`<h2>${b.icon} ${b.name}</h2><p>${b.desc}</p><div class="stat"><span>Category</span><b>${catN}</b></div><div class="stat"><span>Cost to build</span><b>🪙 ${fmt(c)}</b></div><div class="stat"><span>You own</span><b>${n}</b></div>
+  <div class="stat"><span>Outputs</span><b>${b.out?(k==='sort'?'Front = pass, sides = reject':k==='split'?'Front + both sides':'Where its yellow arrow points'):'None'}</b></div>${infoStats(k)}
+  <button class="buy wide" data-a="pick:${k}" data-c="${c}">Build ${b.name}</button>`}
  else if(sheetKind==='land'){const c=landCost();h=`<h2>🪧 Buy this land</h2><p>An 8×8 plot next to your farm. Your map can grow to 64×64 tiles.</p>
   <div class="stat"><span>Plots owned</span><b>${S.land.length} / ${NCH*NCH}</b></div><button class="buy wide" data-a="buyland" data-c="${c}">🪙 ${fmt(c)} — Buy land</button>`}
  else if(sheetKind==='zip'){h=(sheetArg?'':X)+`<h2>🌦️ Where's your farm?</h2><p>Enter your ZIP code. Your farm's weather follows your area's climate, the current season and the time of day.</p>
@@ -572,6 +581,21 @@ function render(){const sh=$('#sheet');let h='';
  sh.innerHTML=(sheetKind==='zip'&&sheetArg?'':'<div class="shx"><button class="x" data-a="close">✕</button></div>')+h;refreshSheet()}
 const hydroCost=()=>Math.floor(1500*Math.pow(1.6,Object.values(S.tiles).filter(t=>t.k==='farm'&&t.hy).length));
 let resetArm=false;
+function infoStats(k){const st=(a,b)=>`<div class="stat"><span>${a}</span><b>${b}</b></div>`;
+ switch(k){
+  case'bank':return st('Seeds per lane','~'+fmt2(bankRate(S.up.rate))+'/s')+st('Belt lanes',lanes())+st('Bell seeds','Free, unlimited');
+  case'farm':return st('Plots',plots()+' (hydroponic +2)')+st('Bell grow time',fmt2(growT(0))+'s')+st('Base quality',50+4*S.up.soil)+st('Hydroponic upgrade','2.5× faster, 🪙 '+fmt(hydroCost()))+st('Weather now',WXT[WX.type].i+' ×'+fmt2(wxGrow(0)));
+  case'barn':return st('Manure per cow','7.5/min')+st('Fertilizer effect','2× growth, +30s per load')+st('Extra cows','Up to 8, from 🪙 '+fmt(cowCost(1)));
+  case'arm':return st('Speed',fmt2(1/armP(S.up.arm))+' moves/s')+st('Picks from','Belts, storage, farms, barns, sorters');
+  case'cross':return st('Pair time','2.5s')+st('Bays per warehouse',1+S.up.bays)+st('Seeds per pair','2')+st('Research',fmt2(S.res)+' / '+resNeed()+' pairs');
+  case'sort':return st('Default rule','≥3★ passes')+st('Infected','Always rejected');
+  case'split':return st('Pattern','Front → left → right, repeating');
+  case'store':return st('Capacity',STORE_CAP+' items')+st('Release speed','4 items/s');
+  case'compost':return st('Takes','Anything');
+  case'market':return st('Price boost','×'+fmt2(vmult()))+st('Best pepper now',V[S.disc-1].n+' ~🪙'+fmt(V[S.disc-1].val*vmult()));
+  case'taste':return st('Speed','1 pepper / 1.2s')+st('Rewards','😍 3 seeds • 😋 2 • 😐 1')+st('Charm bonus','+'+5*S.up.charm);
+  case'spray':return st('Covers','3×3 around it')+st('Quality penalty','−'+Math.round(sprayPen(S.up.eco)))+st('Protected farms',[...PROT].filter(x=>S.tiles[x]&&S.tiles[x].k==='farm').length);
+ }return''}
 const cowCost=n=>Math.floor(300*Math.pow(2,n-1));
 const cureCost=()=>Math.max(50,perSec()*15);
 function refreshSheet(){if(!sheetKind)return;document.querySelectorAll('#sheet [data-c]').forEach(b=>b.classList.toggle('no',S.coins<+b.dataset.c));
@@ -593,6 +617,7 @@ function act(a,v){const t=sheetKind==='b'?S.tiles[sheetArg]:null;
  else if(a==='zipopen'){openSheet('zip',0);return}
  else if(a==='wxon')S.wxOn=v==='1';
  else if(a==='reset'){if(!resetArm){resetArm=true;render();setTimeout(()=>{resetArm=false},4000);return}try{localStorage.removeItem(SAVE_KEY)}catch(e){}S=fresh();S.seen=true;S.zipAsked=true;BI={};rebuild();home();updWx(true);closeSheet();toast('Game reset');save();return}
+ else if(a==='pick'){if(tool!=='build')setTool('build');cat=(CATS.find(x=>x.items.includes(v))||{}).id||null;pickK=v;renderPicker();$('#hint').textContent='Tap a tile or belt to place '+BT[v].name+'.';closeSheet();return}
  else if(a==='buyland'){const c=landCost(),[cx,cy]=xy(sheetArg);if(S.coins<c||!buyable(cx,cy))return;S.coins-=c;S.land.push(sheetArg);rebuild();clampCam();toast('🪧 New land bought!');save();closeSheet();return}
  else if(a==='cow'){const n=t.cows||1,c=cowCost(n);if(n>=8||S.coins<c)return;S.coins-=c;t.cows=n+1;toast('🐄 New cow!')}
  else if(a==='cure'){const c=cureCost();if(S.coins<c)return;S.coins-=c;t.inf=0;toast('🧪 Farm cured')}
@@ -613,6 +638,7 @@ function hud(){$('#coinv').innerHTML='🪙 <b>'+fmt(S.coins)+'</b>';const L=lane
 let last=performance.now(),hudT=0;
 function tick(now){let dt=(now-last)/1000;last=now;if(dt>5){away(dt);dt=0}dt=Math.min(dt,.1);step(dt);draw(now);hudT+=dt;if(hudT>.25){hudT=0;hud()}requestAnimationFrame(tick)}
 function away(sec){const r=S.rate||perSec();if(r<=0)return;const g=Math.min(sec,4*3600)*r*.5;S.coins+=g;S.run+=g;S.total+=g;toast('While away you earned 🪙 '+fmt(g))}
+document.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});window.addEventListener('resize',resize);
 rebuild();resize();setTool('hand');
 if(S.t&&S.rate>0){const el=(Date.now()-S.t)/1000;if(el>30)away(el)}

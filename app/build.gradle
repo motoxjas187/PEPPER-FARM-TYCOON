@@ -1,0 +1,34 @@
+plugins { id 'com.android.application' }
+
+def runNo = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger()
+
+android {
+    namespace 'com.motoxjas187.pepperfarm'
+    compileSdk 34
+    defaultConfig {
+        applicationId "com.motoxjas187.pepperfarm"
+        minSdk 24
+        targetSdk 34
+        versionCode runNo
+        versionName "1.0." + runNo
+    }
+    signingConfigs {
+        // Same key every build so new APKs install over old ones (keeps your save)
+        shared {
+            storeFile rootProject.file('keystore/pepperfarm.keystore')
+            storePassword 'pepperfarm'
+            keyAlias 'pepperfarm'
+            keyPassword 'pepperfarm'
+        }
+    }
+    buildTypes {
+        release { minifyEnabled false; signingConfig signingConfigs.shared }
+        debug { signingConfig signingConfigs.shared }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies { implementation 'androidx.webkit:webkit:1.11.0' }

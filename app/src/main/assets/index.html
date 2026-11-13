@@ -114,7 +114,8 @@ canvas{position:absolute;top:0;touch-action:none}
 <script>
 "use strict";
 const $=s=>document.querySelector(s);
-const WORLD=64,WH=96,CH=8,NCH=8,NCHY=12,DROW=8,SP=0.3,BELT_FEE=50,SAVE_KEY='pepperfarm_v1';
+const WORLD=64,WH=96,CH=8,NCH=8,NCHY=12,DROW=8,BELT_FEE=50,SAVE_KEY='pepperfarm_v1';
+let SP=.36;
 const DX=[1,0,-1,0],DY=[0,1,0,-1];
 
 /* ---------------- data ---------------- */
@@ -210,6 +211,7 @@ function save(){S.t=Date.now();S.rate=S.brk?0:perSec();try{localStorage.setItem(
 const lanes=()=>Math.min(2+S.prest,6);
 const seedWork=()=>Math.pow(1.2,S.up.seedq||0);
 const LVX={dock:1.3,mixer:1.2,brewer:1.2,encap:1.2,lab:1.2,reactor:1.2,bank:1.3,farm:1.12,barn:1.1,arm:1.15,cross:1.15,taste:1.15,store:1.5,market:1.08,sort:1.25,split:1.25,solar:1.2,wind:1.2,bio:1.2};
+const crateN=t=>Math.pow(2,Math.floor((t.lv||0)/5));
 const lvl=t=>t.lv||0,lvM=t=>Math.pow(LVX[t.k]||1,lvl(t)),lvCost=t=>Math.floor(BT[t.k].cost*1.5*Math.pow(1.7,lvl(t)));
 const fPlots=t=>plots()+(t.hy?2:0)+Math.floor(lvl(t)/3);
 const autoRate=t=>.5*lvM(t)/seedWork();
@@ -291,7 +293,7 @@ function geom(x,y,i,o,L){const cx=x+.5,cy=y+.5,E=[cx-DX[i]*.5,cy-DY[i]*.5],X=[cx
  const mk=d=>{const c=i===o?[no[0]*d,no[1]*d]:[(ni[0]+no[0])*d,(ni[1]+no[1])*d];return[[E[0]+ni[0]*d,E[1]+ni[1]*d],[cx+c[0],cy+c[1]],[X[0]+no[0]*d,X[1]+no[1]*d]]};
  const g={l:[],dv:[],c:mk(0)};for(let l=0;l<L;l++)g.l.push(mk(((l+.5)/L-.5)*.76));for(let l=1;l<L;l++)g.dv.push(mk((l/L-.5)*.76));return g}
 function feeds(nb,s){return nb&&nb.d===s&&(nb.k==='belt'||BT[nb.k].out)}
-function rebuild(){const L=lanes();LAND=new Set(S.land);LANDP=new Set(S.pland);LANDD=new Set(S.dland);
+function rebuild(){const L=lanes();SP=Math.min(.4,(.76/L)*.95);LAND=new Set(S.land);LANDP=new Set(S.pland);LANDD=new Set(S.dland);
  for(const k in BI)if(!S.tiles[k]||S.tiles[k].k!=='belt')delete BI[k];
  GEO={};PROT=new Set();UGL={};
  for(const k in S.tiles){const t=S.tiles[k],[x,y]=xy(k);
@@ -321,7 +323,7 @@ function accept(t,k,it,d){
   case'farm':{if(it.m){if((t.fz||0)>=120)return false;t.fz=(t.fz||0)+30;return true}
    if(it.s){t.sb=t.sb||[];if(t.sb.length+t.pl.length>=fPlots(t))return false;t.sb.push({t:it.t,r:it.r||0});t.lastV=it.t;return true}
    if(it.g!==undefined){t.inv=t.inv||{};if((t.inv[it.g]||0)>=4)return false;t.inv[it.g]=(t.inv[it.g]||0)+(it.n||1);return true}return false}
-  case'mixer':case'brewer':case'encap':case'lab':case'reactor':{const r=RCP[t.k];if(it.g===undefined||!r.in[it.g])return false;t.inv=t.inv||{};if((t.inv[it.g]||0)>=r.in[it.g]*2)return false;t.inv[it.g]=(t.inv[it.g]||0)+(it.n||1);return true}
+  case'mixer':case'brewer':case'encap':case'lab':case'reactor':{const r=RCP[t.k];if(it.g===undefined||!r.in[it.g])return false;t.inv=t.inv||{};if((t.inv[it.g]||0)>=r.in[it.g]*2*crateN(t))return false;t.inv[it.g]=(t.inv[it.g]||0)+(it.n||1);return true}
   case'market':case'farmers':{const g=price(it,t);earn(g);sellStats(it);if(t.k==='farmers'&&!it.s&&!it.m&&it.g===undefined){t.mix=t.mix||[];t.mix.push(it.t);if(t.mix.length>12)t.mix.shift()}fl(k,'+'+fmt(g),'#ffc83d');return true}
   case'ugin':{const ok=UGL[k];if(!ok)return false;const o=S.tiles[ok];o.q=o.q||[];if(o.q.length>=4)return false;const[a,b]=xy(k),[c,e]=xy(ok);it.eta=SIMT+(Math.abs(c-a)+Math.abs(e-b))/speed();o.q.push(it);return true}
   case'bio':{if(!it.m)return false;const n=it.n||1;let u=0;while(u<n&&(t.fuel||0)<120){t.fuel=(t.fuel||0)+20;u++}if(!u)return false;if(u<n){it.n=n-u;return false}return true}
@@ -362,7 +364,7 @@ function wants(t,it){if(it.vh)return false;
  switch(t.k){
   case'farm':{if(it.m)return(t.fz||0)<90;const sb=t.sb||[],inv=t.inv||{};if(it.s)return sb.length+t.pl.length<fPlots(t);
    if(it.g!==undefined){if((inv[it.g]||0)>=3)return false;if(sb.some(q=>needIng(q.t)===it.g))return true;let tot=0;for(const g in inv)tot+=inv[g];return!sb.length&&tot<2&&it.g===needIng(t.lastV||0)}return false}
-  case'mixer':case'brewer':case'encap':case'lab':case'reactor':{const r=RCP[t.k];return it.g!==undefined&&!!r.in[it.g]&&((t.inv||{})[it.g]||0)<r.in[it.g]*2}
+  case'mixer':case'brewer':case'encap':case'lab':case'reactor':{const r=RCP[t.k];return it.g!==undefined&&!!r.in[it.g]&&((t.inv||{})[it.g]||0)<r.in[it.g]*2*crateN(t)}
   case'taste':{if(it.s||it.m||it.g!==undefined||(t.q||[]).length>=2)return false;const[tx,ty]=xy(t._k);return!!adjMarket(tx,ty)}
   case'cross':return!it.s&&!it.m&&it.g===undefined&&(t.q||[]).length<2*(1+S.up.bays);
   case'bio':return!!it.m&&(t.fuel||0)<100;
@@ -372,7 +374,8 @@ function laser(t,k,x,y,dt){t._k=k;t.lzT=Math.min(.5,(t.lzT||0)+dt*lvM(t)*pf(t)*(
  for(let d=0;d<4;d++){if(t.k==='store'&&d===t.d)continue;const bk=K(x+DX[d],y+DY[d]),bt=S.tiles[bk],ls=BI[bk];if(!bt||bt.k!=='belt'||!ls)continue;
   for(let l=0;l<ls.length;l++){const a=ls[l];for(let i=0;i<a.length;i++){const it=a[i];if(!wants(t,it))continue;const g=GEO[bk],pos=g?posAt(g,l,it.p):[x+DX[d]+.5,y+DY[d]+.5];
    a.splice(i,1);if(accept(t,k,it,d)){t.lzT=0;VFX.push({o:0,lz:1,x0:pos[0],y0:pos[1],x1:x+.5,y1:y+.5,it,t:0});return}a.splice(i,0,it)}}}}
-function srcBlock(t,k,blocked,x,y,dt){if(blocked&&tileAt(x+DX[t.d],y+DY[t.d]))t.blk=(t.blk||0)+dt;else t.blk=Math.max(0,(t.blk||0)-dt*2);if(t.blk>12&&!S.brk)tripBreaker(k)}
+function srcBlock(t,k,blocked,x,y,dt){const ok=K(x+DX[t.d],y+DY[t.d]),ot=S.tiles[ok];let jam=blocked&&!!ot;if(jam&&ot.k==='belt'&&BI[ok])jam=BI[ok].every(a=>a.length&&a[a.length-1].st);
+ if(jam)t.blk=(t.blk||0)+dt;else t.blk=Math.max(0,(t.blk||0)-dt*2);if(t.blk>12&&!S.brk)tripBreaker(k)}
 function tripBreaker(k){S.brk={k};flashT=1.2;if(navigator.vibrate)try{navigator.vibrate([90,60,90])}catch(_){}save()}
 function resetBreaker(clear){if(clear){for(const k in BI)for(const a of BI[k])a.length=0;VFX.length=0;for(const k in S.tiles){const t=S.tiles[k];if(t.k==='ugout')t.q=[]}}
  S.brk=null;for(const k in S.tiles)S.tiles[k].blk=0;toast(clear?'🔌 Belts cleared, power back on':'🔌 Power back on');save()}
@@ -408,10 +411,10 @@ function updB(t,k,dt){const[x,y]=xy(k);
    else{t.ph=Math.min(1,(t.ph||0)+dt/(P*.5));if(t.ph>=1&&push(x,y,t.d,t.h)){t.h=null;t.ph=0;t.ret=1}}break}
   case'split':t.cd=Math.max(0,(t.cd||0)-dt*8*lvM(t)*pf(t));if(t.buf&&t.cd<=0){if(emit(t,x,y,t.buf,[t.d,(t.d+3)%4,(t.d+1)%4],true)){t.buf=null;t.cd=1}}break;
   case'bio':if(t.fuel>0)t.fuel=Math.max(0,t.fuel-dt);break;
-  case'dock':{const L=lanes(),r=.6*lvM(t);t.a=t.a||[];let bl=false;for(let l=0;l<L;l++){t.a[l]=(t.a[l]||0)+r*dt;if(t.a[l]<1)continue;if(push(x,y,t.d,{g:0,q:0,n:1},l))t.a[l]-=1;else{t.a[l]=1;bl=true}}srcBlock(t,k,bl,x,y,dt);break}
+  case'dock':{const L=lanes(),r=.6*lvM(t);t.a=t.a||[];let bl=false;for(let l=0;l<L;l++){t.a[l]=(t.a[l]||0)+r*dt;if(t.a[l]<1)continue;if(push(x,y,t.d,{g:0,q:0,n:crateN(t)},l))t.a[l]-=1;else{t.a[l]=1;bl=true}}srcBlock(t,k,bl,x,y,dt);break}
   case'mixer':case'brewer':case'encap':case'lab':case'reactor':{const r=RCP[t.k];t.inv=t.inv||{};t.out=t.out||[];
-   if(!t.cr&&t.out.length<4&&Object.keys(r.in).every(g=>(t.inv[g]||0)>=r.in[g])){for(const g in r.in)t.inv[g]-=r.in[g];t.cr=1;t.cp=0}
-   if(t.cr){t.cp=(t.cp||0)+dt*lvM(t)*pf(t)*(boostOn()?2:1)/r.tm;if(t.cp>=1){t.cr=0;t.cp=0;t.out.push({g:r.out,q:0,n:1})}}
+   const b=crateN(t);if(!t.cr&&t.out.length<4&&Object.keys(r.in).every(g=>(t.inv[g]||0)>=r.in[g]*b)){for(const g in r.in)t.inv[g]-=r.in[g]*b;t.cr=b;t.cp=0}
+   if(t.cr){t.cp=(t.cp||0)+dt*lvM(t)*pf(t)*(boostOn()?2:1)/r.tm;if(t.cp>=1){t.out.push({g:r.out,q:0,n:t.cr});t.cr=0;t.cp=0}}
    if(t.out.length&&emit(t,x,y,t.out[0],[t.d]))t.out.shift();break}
  }}
 function take(sx,sy){const k=K(sx,sy),st=S.tiles[k];if(!st)return null;
@@ -433,9 +436,9 @@ function outbreak(){S.ob=40+Math.random()*50;const farms=Object.keys(S.tiles).fi
 function step(dt){SIMT+=dt;droneStep(dt);const L=lanes(),mv=speed()*dt;
  if(!S.brk)for(const k in BI){const t=S.tiles[k];if(!t||t.k!=='belt')continue;const[x,y]=xy(k),ls=BI[k];
   for(let l=0;l<L&&l<ls.length;l++){const a=ls[l];
-   const df=1/(1+.12*Math.max(0,a.length-2));let nxt=null;
+   const df=1/(1+.18*Math.max(0,a.length-Math.floor(.85/SP)));let nxt=null;
    if(a.length){const nk2=K(x+DX[t.d],y+DY[t.d]),nb=BI[nk2],nt2=S.tiles[nk2];if(nt2&&nt2.k==='belt'&&nb&&nb[l]&&nb[l].length)nxt=nb[l][nb[l].length-1].p}
-   for(let i=0;i<a.length;i++){const it=a[i],gap=i===0?(nxt===null?9:1-it.p+nxt):a[i-1].p-it.p,lim=i===0?1:a[i-1].p-SP,op=it.p,f=.2+.8*Math.max(0,Math.min(1,(gap-SP)/.45));
+   for(let i=0;i<a.length;i++){const it=a[i],gap=i===0?(nxt===null?9:1-it.p+nxt):a[i-1].p-it.p,lim=i===0?1:a[i-1].p-SP,op=it.p,f=1;
     if(lim>it.p)it.p=Math.min(it.p+mv*f*df,lim);it.st=it.p===op}
    if(a.length&&a[0].p>=1){const it=a[0],tg=tileAt(x+DX[t.d],y+DY[t.d]),[ix,iy]=posAt(GEO[k],l,1);if(push(x,y,t.d,it,l,true)){a.shift();if(tg&&tg.k!=='belt')VFX.push({o:0,x0:ix,y0:iy,x1:x+DX[t.d]+.5,y1:y+DY[t.d]+.5,it,t:0})}}}}
  if(!S.brk)for(const k in S.tiles){const t=S.tiles[k];if(t.k!=='belt'){SRCB=k;updB(t,k,dt)}}SRCB=null;
@@ -467,6 +470,10 @@ const EMO='"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 function emo(e,x,y,s){ctx.font=s+'px '+EMO;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(e,x,y)}
 function txt(s,x,y,size,col){ctx.font='900 '+size+'px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=Math.max(2,size*.22);ctx.strokeStyle='#000b';ctx.strokeText(s,x,y);ctx.fillStyle=col||'#fff';ctx.fillText(s,x,y)}
 function poly(p){ctx.beginPath();ctx.moveTo(p[0][0]*T,p[0][1]*T);if(p.length===3)ctx.quadraticCurveTo(p[1][0]*T,p[1][1]*T,p[2][0]*T,p[2][1]*T);else for(let i=1;i<p.length;i++)ctx.lineTo(p[i][0]*T,p[i][1]*T);ctx.stroke()}
+function drawCrate(x,y,s,it){const r=s/2;ctx.fillStyle=it.r?'#e8c060':'#c98f4e';rr(x-r,y-r,s,s,s*.14);ctx.fill();ctx.strokeStyle='#6e4520';ctx.lineWidth=Math.max(1,s*.07);ctx.stroke();
+ if(s>=14){ctx.strokeStyle='#a8723a';ctx.lineWidth=Math.max(1,s*.04);ctx.beginPath();ctx.moveTo(x-r*.78,y-r*.5);ctx.lineTo(x+r*.78,y-r*.5);ctx.moveTo(x-r*.78,y+r*.5);ctx.lineTo(x+r*.78,y+r*.5);ctx.stroke()}
+ if(it.g!==undefined){if(s>=11)emo(ING[it.g].e,x,y-s*.04,s*.62);else{ctx.fillStyle=ING[it.g].c;ctx.beginPath();ctx.arc(x,y,r*.45,0,7);ctx.fill()}}else drawPep(x,y-s*.04,s*.8,it);
+ const n=it.n||1;if(n>1&&s>=13)txt('x'+(n<1000?n:fmt(n)),x+r*.42,y+r*.62,Math.max(7,s*.34),'#fff')}
 function drawPep(x,y,s,it){const v=V[it.t],r=s/2;
  if(it.g!==undefined){const I=ING[it.g];ctx.fillStyle=I.c;rr(x-r*.8,y-r*.8,r*1.6,r*1.6,r*.38);ctx.fill();ctx.lineWidth=Math.max(1,s*.06);ctx.strokeStyle='#000a';ctx.stroke();if(s>=11)emo(I.e,x,y+s*.03,s*.6);return}
  if(it.m){ctx.fillStyle='#6b4423';ctx.beginPath();ctx.ellipse(x,y+r*.2,r*.55,r*.3,0,0,7);ctx.fill();if(s>=9){ctx.fillStyle='#7d5230';ctx.beginPath();ctx.ellipse(x,y-r*.1,r*.38,r*.24,0,0,7);ctx.fill();ctx.fillStyle='#8f6038';ctx.beginPath();ctx.ellipse(x,y-r*.35,r*.2,r*.16,0,0,7);ctx.fill()}return}
@@ -580,13 +587,13 @@ function draw(now){ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#120d0a';ctx
  ctx.strokeStyle='rgba(255,255,255,.07)';ctx.lineWidth=Math.max(1,T*.02);for(const[,g]of gs){poly(g.l[0]);}
  for(const k in UGL){const[a,b]=xy(k),[c,e]=xy(UGL[k]);ctx.strokeStyle='rgba(255,216,74,.35)';ctx.lineWidth=Math.max(2,T*.06);ctx.setLineDash([T*.15,T*.15]);ctx.beginPath();ctx.moveTo((a+.5)*T,(b+.5)*T);ctx.lineTo((c+.5)*T,(e+.5)*T);ctx.stroke();ctx.setLineDash([])}
  for(const[k,g]of gs){const t=S.tiles[k],c=g.c[2];arrow(c[0]*T-DX[t.d]*T*.5,c[1]*T-DY[t.d]*T*.5,t.d,'#ffffff30',T*.9)}
- const s=Math.min(.32,(.76/L)*.92)*T;
- for(const[k,g]of gs){const ls=BI[k];if(!ls)continue;for(let l=0;l<L&&l<ls.length;l++)for(const it of ls[l]){if(it.vh)continue;const[x,y]=posAt(g,l,it.p);drawPep(x*T,y*T,s,it);if((it.n||1)>1&&s>=12)txt('x'+it.n,x*T+s*.38,y*T+s*.36,Math.max(8,s*.36),'#fff')}}
+ const s=SP*T*.97;
+ for(const[k,g]of gs){const ls=BI[k];if(!ls)continue;for(let l=0;l<L&&l<ls.length;l++)for(const it of ls[l]){if(it.vh)continue;const[x,y]=posAt(g,l,it.p);drawCrate(x*T,y*T,s,it)}}
  for(const v of VFX){let px,py,sc=1;const e=v.t*v.t*(3-2*v.t);
   if(v.o){const ls=BI[v.k],a=ls&&ls[v.l];if(!a||!a.includes(v.it)||!GEO[v.k])continue;const[ex,ey]=posAt(GEO[v.k],v.l,v.it.p);px=v.x0+(ex-v.x0)*e;py=v.y0+(ey-v.y0)*e;sc=.5+.5*e}
   else{px=v.x0+(v.x1-v.x0)*e;py=v.y0+(v.y1-v.y0)*e;sc=1-.6*e}
   if(v.lz){ctx.strokeStyle='rgba(255,50,40,'+(1-v.t)*.9+')';ctx.lineWidth=Math.max(2,T*.06);ctx.beginPath();ctx.moveTo(v.x1*T,v.y1*T);ctx.lineTo(px*T,py*T);ctx.stroke();ctx.strokeStyle='rgba(255,220,210,'+(1-v.t)+')';ctx.lineWidth=1;ctx.stroke()}
-  drawPep(px*T,py*T,s*sc,v.it)}
+  drawCrate(px*T,py*T,s*sc,v.it)}
  for(const k in S.tiles){const t=S.tiles[k];if(t.k!=='belt')drawB(k,t,now)}
  for(const k in S.tiles){const t=S.tiles[k];if(t.k==='farm'&&t.inf>0){const[x,y]=xy(k);beacon((x+.04)*T+T*.92*.82,(y+.04)*T+T*.92*.16,T*.92,now)}}
  for(const f of floats){ctx.globalAlpha=Math.max(0,Math.min(1,f.t*1.5));txt(f.txt,f.x*T,f.y*T,Math.max(10,T*.25),f.col);ctx.globalAlpha=1}
@@ -845,6 +852,7 @@ function lvDesc(t){const m=lvM(t),n=m*LVX[t.k],f=v=>'×'+fmt2(v);
  switch(t.k){case'bank':return(t.tap?'Tap power ':'Seed output ')+f(m)+' → '+f(n)+'. ✨ Rare seeds at level '+(Math.floor(lvl(t)/5)+1)*5;case'farm':return'Growth '+f(m)+' → '+f(n)+', +1 plot every 3 levels';
   case'barn':return'Manure '+f(m)+' → '+f(n)+', space '+barnCap(t)+' → '+(barnCap(t)+2);case'store':return'Space '+Math.floor(STORE_CAP*m)+' → '+Math.floor(STORE_CAP*n);
   case'market':return'Prices '+f(m)+' → '+f(n)+', faster demand recovery';case'solar':case'wind':case'bio':return'Output '+f(m)+' → '+f(n);
+  case'dock':case'mixer':case'brewer':case'encap':case'lab':case'reactor':return'Speed '+f(m)+' → '+f(n)+'. Crates x'+crateN(t)+' (doubles every 5 levels)';
   default:return'Speed '+f(m)+' → '+f(n)}}
 const cureCost=()=>Math.max(50,perSec()*15);
 function refreshSheet(){if(!sheetKind)return;document.querySelectorAll('#sheet [data-c]').forEach(b=>b.classList.toggle('no',S.coins<+b.dataset.c));document.querySelectorAll('#sheet [data-cm]').forEach(b=>b.classList.toggle('no',(S.manure||0)<+b.dataset.cm));document.querySelectorAll('#sheet [data-cg]').forEach(b=>b.classList.toggle('no',S.gp<+b.dataset.cg));

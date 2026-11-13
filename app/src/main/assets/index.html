@@ -104,7 +104,7 @@ canvas{position:absolute;top:0;touch-action:none}
     <button class="tb" data-t="erase"><span>🗑️</span>Remove</button>
   </div>
 </div>
-<div id="mine"><canvas id="mcv"></canvas><div id="mhud"><span id="mhp">❤️ 10/10</span><span id="mdp">⬇️ 0m</span><span id="mbag">🎒 0</span><button id="mexit">⬆️ Exit & sell</button></div><div id="mhint">Hold on a block to mine it. Tap enemies to hit them.</div><div id="mctl"><button id="mL">◀</button><button id="mR">▶</button><div style="flex:1"></div><button id="mJ">⤒</button></div></div>
+<div id="mine"><canvas id="mcv"></canvas><div id="mhud"><span id="mhp">❤️ 10/10</span><span id="mdp">⬇️ 0m</span><span id="mbag">🎒 0</span><button id="mexit">⬆️ Exit & sell</button></div><div id="mhint">Drag in the bottom-left to move (push up to jump). Hold anywhere else to mine or hit enemies.</div></div>
 <div id="toast"></div>
 <div id="ov"><div id="sheet"></div></div>
 
@@ -217,7 +217,7 @@ const sprayPen=l=>15*Math.pow(.8,l);
 const stars=q=>Math.max(1,Math.min(5,Math.ceil(q/20)));
 const vmult=()=>Math.pow(1.25,S.up.hype)*Math.pow(1.5,S.prest)*Math.pow(1.08,S.up.seedq||0)*Math.pow(1.25,pm('pval'));
 function mkMult(mk){if(!mk)return 1;let m=lvM(mk)*(mk.dist?1.25:1);if(mk.k==='farmers'){const mix=new Set(mk.mix||[]).size;m*=1.6*(1+.1*mix)}return m}
-const price=(it,mk)=>it.m?.5*vmult():it.s?V[it.t].val*.2*vmult():V[it.t].val*(.4+1.2*it.q/100)*vmult()*(it.inf?.1:1)*(S.dem[it.t]||1)*mkMult(mk)*(it.n||1)*(it.r?5:1);
+const price=(it,mk)=>it.m?.5*vmult()*(it.n||1):it.s?V[it.t].val*.2*vmult()*(it.n||1):V[it.t].val*(.4+1.2*it.q/100)*vmult()*(it.inf?.1:1)*(S.dem[it.t]||1)*mkMult(mk)*(it.n||1)*(it.r?5:1);
 function adjMarket(x,y){for(let d=0;d<4;d++){const k=K(x+DX[d],y+DY[d]),t=S.tiles[k];if(t&&(t.k==='market'||t.k==='farmers'))return t}return null}
 function sellStats(it){if(it.s||it.m)return;const n=it.n||1;S.dem[it.t]=Math.max(.4,S.dem[it.t]-Math.min(.02,.0015*n));S.vs[it.t]=(S.vs[it.t]||0)+n;S.st.sold+=n}
 const resNeed=()=>3+3*S.disc;
@@ -283,27 +283,33 @@ function rebuild(){const L=lanes();LAND=new Set(S.land);LANDP=new Set(S.pland);L
  for(const k in S.tiles){const t=S.tiles[k],[x,y]=xy(k);
   if(t.k==='belt'){if(!BI[k])BI[k]=[];while(BI[k].length<L)BI[k].push([]);
    let ind=t.d;if(!feeds(tileAt(x-DX[t.d],y-DY[t.d]),t.d)){for(const s of[(t.d+1)%4,(t.d+3)%4])if(feeds(tileAt(x-DX[s],y-DY[s]),s)){ind=s;break}}
-   GEO[k]=geom(x,y,ind,t.d,L)}
+   GEO[k]=geom(x,y,ind,t.d,L);GEO[k].ind=ind}
   if(t.k==='ugin'){for(let j=1;j<=8;j++){const ok=K(x+DX[t.d]*j,y+DY[t.d]*j),o=S.tiles[ok];if(o&&o.k==='ugout'&&o.d===t.d){UGL[k]=ok;break}if(o&&o.k==='ugin'&&o.d===t.d)break}}
   if(t.k==='spray')for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)PROT.add(K(x+a,y+b))}
  renderPicker()}
 function posAt(g,l,p){const[E,C,X]=g.l[l],u=1-p;return[u*u*E[0]+2*u*p*C[0]+p*p*X[0],u*u*E[1]+2*u*p*C[1]+p*p*X[1]]}
 
 /* ---------------- movement ---------------- */
-function insLane(k,l,it){const a=BI[k][l],last=a[a.length-1];if(last&&last.p<SP)return false;it.p=0;a.push(it);return true}
+const VFX=[];let SRCB=null;
+function vfxOut(k,l,it){if(!SRCB)return;const[sx,sy]=xy(SRCB);it.vh=1;VFX.push({o:1,x0:sx+.5,y0:sy+.5,it,k,l,t:0})}
+function insLane(k,l,it){const a=BI[k][l],last=a[a.length-1];if(last&&last.p<SP)return false;it.p=0;a.push(it);vfxOut(k,l,it);return true}
+const canMerge=(a,b)=>!a.vh&&!b.vh&&!!a.s===!!b.s&&!!a.m===!!b.m&&a.t===b.t&&!!a.inf===!!b.inf&&!!a.r===!!b.r&&(a.n||1)+(b.n||1)<=99;
+function insLaneAt(k,l,it,p){const a=BI[k][l];let i=0;while(i<a.length&&a[i].p>=p)i++;if(i>0&&a[i-1].p-p<SP)return false;if(i<a.length&&p-a[i].p<SP)return false;it.p=p;a.splice(i,0,it);vfxOut(k,l,it);return true}
 function push(x,y,d,it,lane){const nx=x+DX[d],ny=y+DY[d],nk=K(nx,ny),nt=S.tiles[nk];if(!nt)return false;
  if(nt.k==='belt'){if(nt.d===(d+2)%4||!BI[nk])return false;const L=lanes();
+  const g=GEO[nk];if(nt.d!==d&&g&&g.ind!==d){const n=nrm(nt.d),right=(-DX[d])*n[0]+(-DY[d])*n[1]>0,half=Math.max(1,Math.floor(L/2)),ls=[];
+   for(let i=0;i<half;i++)ls.push(right?L-1-i:i);const r=RR[nk+'s']||0;for(let i=0;i<ls.length;i++){const l=ls[(r+i)%ls.length];if(insLaneAt(nk,l,it,.5)){RR[nk+'s']=r+i+1;return true}}return false}
   if(lane!==undefined&&lane<L)return insLane(nk,lane,it);
   const r=RR[nk]||0;for(let i=0;i<L;i++){const l=(r+i)%L;if(insLane(nk,l,it)){RR[nk]=l+1;return true}}return false}
  return accept(nt,nk,it,d)}
 function accept(t,k,it,d){
  switch(t.k){
-  case'farm':if(it.m){if((t.fz||0)>=150)return false;t.fz=(t.fz||0)+30;return true}
-   if(!it.s||t.pl.length>=fPlots(t))return false;t.pl.push({t:it.t,g:0,r:it.r||0});return true;
+  case'farm':{const n=it.n||1;if(it.m){let u=0;while(u<n&&(t.fz||0)<150){t.fz=(t.fz||0)+30;u++}if(!u)return false;if(u<n){it.n=n-u;return false}return true}
+   const free=fPlots(t)-t.pl.length;if(!it.s||free<=0)return false;const kk=Math.min(n,free);for(let i=0;i<kk;i++)t.pl.push({t:it.t,g:0,r:it.r||0});if(kk<n){it.n=n-kk;return false}return true}
   case'market':case'farmers':{const g=price(it,t);earn(g);sellStats(it);if(t.k==='farmers'&&!it.s&&!it.m){t.mix=t.mix||[];t.mix.push(it.t);if(t.mix.length>12)t.mix.shift()}fl(k,'+'+fmt(g),'#ffc83d');return true}
   case'ugin':{const ok=UGL[k];if(!ok)return false;const o=S.tiles[ok];o.q=o.q||[];if(o.q.length>=4)return false;const[a,b]=xy(k),[c,e]=xy(ok);it.eta=SIMT+(Math.abs(c-a)+Math.abs(e-b))/speed();o.q.push(it);return true}
-  case'bio':if(!it.m||(t.fuel||0)>=120)return false;t.fuel=(t.fuel||0)+20;return true;
-  case'barn':if(it.s||it.m||(t.mq||0)>=12+4*lvl(t))return false;t.mq=(t.mq||0)+1;S.manure=(S.manure||0)+1;if(Math.random()<.3)fl(k,'🐄 munch','#ffe2c4');return true;
+  case'bio':{if(!it.m)return false;const n=it.n||1;let u=0;while(u<n&&(t.fuel||0)<120){t.fuel=(t.fuel||0)+20;u++}if(!u)return false;if(u<n){it.n=n-u;return false}return true}
+  case'barn':if(it.s||it.m||(t.mq||0)>=12+4*lvl(t))return false;{const n=Math.min(it.n||1,12+4*lvl(t)-(t.mq||0));t.mq=(t.mq||0)+n;S.manure=(S.manure||0)+n;if(n<(it.n||1)){it.n-=n;return false}}if(Math.random()<.3)fl(k,'🐄 munch','#ffe2c4');return true;
   case'taste':{const[tx,ty]=xy(k);if(it.s||it.m||!adjMarket(tx,ty)||(t.q=t.q||[]).length>=2)return false}t.q.push(it);return true;
   case'cross':if(it.s||it.m||(t.q=t.q||[]).length>=2*(1+S.up.bays))return false;t.q.push(it);return true;
   case'store':if((t.c=t.c||[]).length>=STORE_CAP*lvM(t))return false;t.c.push(it);return true;
@@ -385,9 +391,11 @@ function outbreak(){S.ob=40+Math.random()*50;const farms=Object.keys(S.tiles).fi
 function step(dt){SIMT+=dt;droneStep(dt);const L=lanes(),mv=speed()*dt;
  for(const k in BI){const t=S.tiles[k];if(!t||t.k!=='belt')continue;const[x,y]=xy(k),ls=BI[k];
   for(let l=0;l<L&&l<ls.length;l++){const a=ls[l];
-   for(let i=0;i<a.length;i++){const it=a[i],lim=i===0?1:a[i-1].p-SP;if(lim>it.p)it.p=Math.min(it.p+mv,lim)}
-   if(a.length&&a[0].p>=1&&push(x,y,t.d,a[0],l))a.shift()}}
- for(const k in S.tiles){const t=S.tiles[k];if(t.k!=='belt')updB(t,k,dt)}
+   for(let i=0;i<a.length;i++){const it=a[i],lim=i===0?1:a[i-1].p-SP,op=it.p;if(lim>it.p)it.p=Math.min(it.p+mv,lim);it.st=it.p===op;
+    if(i>0&&it.st&&a[i-1].st&&canMerge(a[i-1],it)){const f=a[i-1],nf=f.n||1,nb=it.n||1;f.q=(f.q*nf+it.q*nb)/(nf+nb);f.n=nf+nb;a.splice(i,1);i--}}
+   if(a.length&&a[0].p>=1){const it=a[0],tg=tileAt(x+DX[t.d],y+DY[t.d]),[ix,iy]=posAt(GEO[k],l,1);if(push(x,y,t.d,it,l)){a.shift();if(tg&&tg.k!=='belt')VFX.push({o:0,x0:ix,y0:iy,x1:x+DX[t.d]+.5,y1:y+DY[t.d]+.5,it,t:0})}}}}
+ for(const k in S.tiles){const t=S.tiles[k];if(t.k!=='belt'){SRCB=k;updB(t,k,dt)}}SRCB=null;
+ for(let i=VFX.length-1;i>=0;i--){const v=VFX[i];v.t+=dt/.22;if(v.t>=1){if(v.o)v.it.vh=0;VFX.splice(i,1)}}
  S.ob-=dt*wxBact();if(S.ob<=0)outbreak();
  pwAcc+=dt;if(pwAcc>=.25){pwAcc=0;calcPower()}
  const evOn=S.ev&&Date.now()<S.ev.until;for(let i=0;i<S.disc;i++){const tg=evOn&&S.ev.t===i?1.8:1;S.dem[i]+=(tg-S.dem[i])*Math.min(1,.015*mktRec*dt)}
@@ -509,15 +517,25 @@ function draw(now){ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#120d0a';ctx
  if(showSpray){ctx.fillStyle='rgba(180,110,255,.12)';PROT.forEach(k=>{const[x,y]=xy(k);if(inG(x,y))ctx.fillRect(x*T,y*T,T,T)})}
  const L=lanes();ctx.lineJoin='miter';ctx.lineCap='butt';
  const gs=Object.entries(GEO);
- ctx.strokeStyle='#f2c230';ctx.lineWidth=T*.92;for(const[,g]of gs)poly(g.c);
- ctx.strokeStyle='#3a3e46';ctx.lineWidth=T*.8;for(const[,g]of gs)poly(g.c);
- ctx.strokeStyle='#22252b';ctx.lineWidth=Math.max(1.5,T*.035);for(const[,g]of gs)for(const d of g.dv)poly(d);
- ctx.strokeStyle='#5a606b';ctx.lineWidth=Math.max(2,T*.05);ctx.setLineDash([T*.12,T*.13]);ctx.lineDashOffset=-((now/1000*speed()*T)%(T*.25));
- for(const[,g]of gs)for(const l of g.l)poly(l);ctx.setLineDash([]);ctx.lineDashOffset=0;
+ ctx.strokeStyle='#23272c';ctx.lineWidth=T*.96;for(const[,g]of gs)poly(g.c);
+ ctx.strokeStyle='#a3acb6';ctx.lineWidth=T*.9;for(const[,g]of gs)poly(g.c);
+ ctx.strokeStyle='#6a737d';ctx.lineWidth=T*.85;for(const[,g]of gs)poly(g.c);
+ ctx.strokeStyle='#1c1f23';ctx.lineWidth=T*.79;for(const[,g]of gs)poly(g.c);
+ ctx.fillStyle='#1c1f23';for(const[k,g]of gs){const t=S.tiles[k],[x,y]=xy(k),nk=K(x+DX[t.d],y+DY[t.d]),nt=S.tiles[nk],ng=GEO[nk];
+  if(nt&&nt.k==='belt'&&ng&&nt.d!==t.d&&nt.d!==(t.d+2)%4&&ng.ind!==t.d){const bx=(x+.5+DX[t.d]*.5)*T,by=(y+.5+DY[t.d]*.5)*T,hw=T*.395,dp=T*.1;
+   if(DX[t.d])ctx.fillRect(bx-(DX[t.d]<0?dp:0)-(DX[t.d]>0?T*.02:0),by-hw,dp+T*.02,hw*2);else ctx.fillRect(bx-hw,by-(DY[t.d]<0?dp:0)-(DY[t.d]>0?T*.02:0),hw*2,dp+T*.02)}}
+ ctx.strokeStyle='#353a42';ctx.lineWidth=T*.75;ctx.setLineDash([T*.045,T*.08]);ctx.lineDashOffset=-((now/1000*speed()*T)%(T*.125));for(const[,g]of gs)poly(g.c);
+ ctx.setLineDash([]);ctx.lineDashOffset=0;
+ ctx.strokeStyle='#0f1114';ctx.lineWidth=Math.max(1.2,T*.03);for(const[,g]of gs)for(const d of g.dv)poly(d);
+ ctx.strokeStyle='rgba(255,255,255,.07)';ctx.lineWidth=Math.max(1,T*.02);for(const[,g]of gs){poly(g.l[0]);}
  for(const k in UGL){const[a,b]=xy(k),[c,e]=xy(UGL[k]);ctx.strokeStyle='rgba(255,216,74,.35)';ctx.lineWidth=Math.max(2,T*.06);ctx.setLineDash([T*.15,T*.15]);ctx.beginPath();ctx.moveTo((a+.5)*T,(b+.5)*T);ctx.lineTo((c+.5)*T,(e+.5)*T);ctx.stroke();ctx.setLineDash([])}
  for(const[k,g]of gs){const t=S.tiles[k],c=g.c[2];arrow(c[0]*T-DX[t.d]*T*.5,c[1]*T-DY[t.d]*T*.5,t.d,'#ffffff30',T*.9)}
  const s=Math.min(.5,(.76/L)*.95)*T;
- for(const[k,g]of gs){const ls=BI[k];if(!ls)continue;for(let l=0;l<L&&l<ls.length;l++)for(const it of ls[l]){const[x,y]=posAt(g,l,it.p);drawPep(x*T,y*T,s,it);if((it.n||1)>1&&s>=12)txt('x'+it.n,x*T+s*.38,y*T+s*.36,Math.max(8,s*.36),'#fff')}}
+ for(const[k,g]of gs){const ls=BI[k];if(!ls)continue;for(let l=0;l<L&&l<ls.length;l++)for(const it of ls[l]){if(it.vh)continue;const[x,y]=posAt(g,l,it.p);drawPep(x*T,y*T,s,it);if((it.n||1)>1&&s>=12)txt('x'+it.n,x*T+s*.38,y*T+s*.36,Math.max(8,s*.36),'#fff')}}
+ for(const v of VFX){let px,py,sc=1;const e=v.t*v.t*(3-2*v.t);
+  if(v.o){const ls=BI[v.k],a=ls&&ls[v.l];if(!a||!a.includes(v.it)||!GEO[v.k])continue;const[ex,ey]=posAt(GEO[v.k],v.l,v.it.p);px=v.x0+(ex-v.x0)*e;py=v.y0+(ey-v.y0)*e;sc=.5+.5*e}
+  else{px=v.x0+(v.x1-v.x0)*e;py=v.y0+(v.y1-v.y0)*e;sc=1-.6*e}
+  drawPep(px*T,py*T,s*sc,v.it)}
  for(const k in S.tiles){const t=S.tiles[k];if(t.k!=='belt')drawB(k,t,now)}
  for(const k in S.tiles){const t=S.tiles[k];if(t.k==='farm'&&t.inf>0){const[x,y]=xy(k);beacon((x+.04)*T+T*.92*.82,(y+.04)*T+T*.92*.16,T*.92,now)}}
  for(const f of floats){ctx.globalAlpha=Math.max(0,Math.min(1,f.t*1.5));txt(f.txt,f.x*T,f.y*T,Math.max(10,T*.25),f.col);ctx.globalAlpha=1}
@@ -679,7 +697,7 @@ function render(){const sh=$('#sheet');let h='';
   <h3>📋 Missions</h3>`+S.mis.map((m,i)=>{const done=m.prog>=m.need;return`<div class="row"><div class="ri">${m.ty==='mine'?'⛏️':m.ty==='kill'?'🗡️':'⬇️'}</div><div class="rt"><b>${m.txt}</b><div class="rd">${Math.min(m.prog,m.need)} / ${m.need} • Reward: ${rwTxt(m.rw)}</div><div class="bar"><i style="width:${Math.min(100,m.prog/m.need*100)}%"></i></div></div>${done?`<button class="buy" data-a="mclaim:${i}">Claim</button>`:''}</div>`}).join('')+
   `<h3>🧰 Gear</h3>`+MUP.map(u=>{const l=mu(u.id);return`<div class="row"><div class="ri">${u.icon}</div><div class="rt"><b>${u.name}</b> <small>Lv ${l}</small><div class="rd">${u.desc(l)} → ${u.desc(l+1)}</div></div>${buy('mup:'+u.id,muCost(l),false)}</div>`}).join('')+
   `<h3>💰 Loot values now</h3>`+[3,4,5,6,7].map(i=>`<div class="stat"><span>${MTI[i].n}${i===6?' (+✨ rare seed)':i===7?' (+🐝 research)':''}</span><b>🪙 ${fmt(MTI[i].v*lootMult())}</b></div>`).join('')+
-  `<p style="color:var(--mut)">Controls: ◀ ▶ to walk, ⤒ to jump (you hop up 1-block steps on your own). Hold on a block to mine it. Tap a creature to hit it. Deeper means better ore and tougher enemies, and a better 🔦 lamp helps you see.</p>`}
+  `<p style="color:var(--mut)">Controls: drag anywhere in the bottom-left to move with a floating joystick (push up to jump; you hop 1-block steps on your own). Hold on a block to mine it. Tap a creature to hit it. Deeper means better ore and tougher enemies, and a better 🔦 lamp helps you see.</p>`}
  else if(sheetKind==='land'&&xy(sheetArg)[1]>=DROW){const c=distCost();h=`<h2>🏙️ Buy a Market District lot</h2><p>An 8×8 lot in the Market District at the bottom of the map. Markets here get a <b>+25% prime-location bonus</b>, and this is the only place for 🧺 Farmers Markets.</p>
   <div class="stat"><span>District lots owned</span><b>${S.dland.length}</b></div><button class="buy wide" data-a="buyland:dist" data-c="${c}">🏙️ Buy lot — 🪙 ${fmt(c)}</button>
   <p style="color:var(--mut)">Run belts down to it. Belts off your own land cost 🪙${BELT_FEE} per tile, and they go underground automatically when they cross something.</p>`}
@@ -883,8 +901,10 @@ function mAct(wx,wy){const p=M.p,pcx=p.x+.35,pcy=p.y+.75;M.swing=.2;if(wx<pcx)p.
  if(Math.hypot(tx+.5-pcx,ty+.5-pcy)>3.6){mfl('Too far','#fbb');M.dig=null;return}
  const key=tx+','+ty;M.dmg[key]=(M.dmg[key]||0)+Math.pow(1.4,mu('pick'));
  if(M.dmg[key]>=MTI[v].h){M.g[ty*MW+tx]=0;delete M.dmg[key];const o=MTI[v];if(o.k){M.bag[o.k]=(M.bag[o.k]||0)+1;mfl('+'+o.n,o.o,tx+.5,ty);misProg('mine',o.k,1)}}}
-function mstep(dt,now){const p=M.p,k=M.keys;p.vx=((k.R?1:0)-(k.L?1:0))*5;if(p.vx)p.face=Math.sign(p.vx);
- if(k.J&&p.og)p.vy=-11.5;moveBox(p,.7,1.5,dt,true);if(p.hitW&&p.og&&p.vx)p.vy=-8.5;
+function mstep(dt,now){const p=M.p,k=M.keys;let ax=(k.R?1:0)-(k.L?1:0),jump=k.J;
+ if(M.joy){const dx=M.joy.x-M.joy.x0,dy=M.joy.y-M.joy.y0;ax=Math.abs(dx)<10?0:Math.max(-1,Math.min(1,dx/50));if(dy<-38)jump=true}
+ p.vx=ax*5;if(p.vx)p.face=Math.sign(p.vx);
+ if(jump&&p.og)p.vy=-11.5;moveBox(p,.7,1.5,dt,true);if(p.hitW&&p.og&&p.vx)p.vy=-8.5;
  p.inv=Math.max(0,p.inv-dt);p.hurtT+=dt;if(p.hurtT>5)p.hp=Math.min(mHpMax(),p.hp+dt*.6);
  const depth=Math.max(0,Math.floor(p.y+1.5-MS));misProg('depth',null,depth,true);
  M.atkT=Math.max(0,M.atkT-dt);M.swing=Math.max(0,M.swing-dt);if(M.dig&&M.atkT<=0){M.atkT=.25;mAct(M.dig.x+M.cam.x/MTs,M.dig.y+M.cam.y/MTs)}
@@ -919,14 +939,18 @@ function mdraw(now){const p=M.p,T2=MTs,W2=MWp,H2=MHp;let cx=(p.x+.35)*T2-W2/2,cy
   mx.strokeStyle='#bfc6cc';mx.lineWidth=4;mx.beginPath();mx.moveTo(p.face*w*.55,-h*.36);mx.quadraticCurveTo(p.face*w*.85,-h*.25,p.face*w*.75,-h*.05);mx.stroke();mx.restore()}}
  const dep=(p.y+1.5-MS);if(dep>2){const a=Math.min(.94,(dep-2)/12*.94),px=(p.x+.35)*T2-cx,py=(p.y+.75)*T2-cy,Rr=(5+1.5*mu('lamp'))*T2,g=mx.createRadialGradient(px,py,Rr*.25,px,py,Rr);
   g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,'+a+')');mx.fillStyle=g;mx.fillRect(0,0,W2,H2)}
+ if(M.joy){const j=M.joy,dx=j.x-j.x0,dy=j.y-j.y0,L=Math.hypot(dx,dy),c=L>50?50/L:1;mx.fillStyle='rgba(255,255,255,.12)';mx.strokeStyle='rgba(255,255,255,.4)';mx.lineWidth=2;mx.beginPath();mx.arc(j.x0,j.y0,56,0,7);mx.fill();mx.stroke();
+  mx.fillStyle='rgba(255,255,255,.55)';mx.beginPath();mx.arc(j.x0+dx*c,j.y0+dy*c,26,0,7);mx.fill()}
+ else if(!M.digId){mx.strokeStyle='rgba(255,255,255,.18)';mx.lineWidth=2;mx.setLineDash([6,6]);mx.beginPath();mx.arc(MWp*.22,MHp*.82,46,0,7);mx.stroke();mx.setLineDash([])}
  for(const f of M.fl){mx.globalAlpha=Math.min(1,f.t);mx.font='900 14px system-ui';mx.textAlign='center';mx.lineWidth=3;mx.strokeStyle='#000a';mx.strokeText(f.txt,f.x*T2-cx,f.y*T2-cy);mx.fillStyle=f.col;mx.fillText(f.txt,f.x*T2-cx,f.y*T2-cy);mx.globalAlpha=1}
  $('#mhp').textContent='❤️ '+Math.ceil(p.hp)+'/'+mHpMax();$('#mdp').textContent='⬇️ '+Math.max(0,Math.floor(dep))+'m';$('#mbag').textContent='🎒 🪙'+fmt(bagVal())}
 function mloop(now){if(!M)return;const dt=Math.min(.05,(now-mlast)/1000);mlast=now;mstep(dt,now);if(M)mdraw(now);requestAnimationFrame(mloop)}
-mcv.addEventListener('pointerdown',e=>{if(!M)return;e.preventDefault();try{mcv.setPointerCapture(e.pointerId)}catch(_){}M.dig={x:e.clientX/MTs,y:e.clientY/MTs};M.atkT=0;$('#mhint').style.display='none'});
-mcv.addEventListener('pointermove',e=>{if(M&&M.dig)M.dig={x:e.clientX/MTs,y:e.clientY/MTs}});
-['pointerup','pointercancel'].forEach(ev=>mcv.addEventListener(ev,()=>{if(M)M.dig=null}));
-[['mL','L'],['mR','R'],['mJ','J']].forEach(([id,kk])=>{const b=$('#'+id);b.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();if(M)M.keys[kk]=true;try{b.setPointerCapture(e.pointerId)}catch(_){}});
- ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>b.addEventListener(ev,()=>{if(M)M.keys[kk]=false}))});
+const inJoyZone=(x,y)=>x<MWp*.48&&y>MHp*.5;
+mcv.addEventListener('pointerdown',e=>{if(!M)return;e.preventDefault();try{mcv.setPointerCapture(e.pointerId)}catch(_){}$('#mhint').style.display='none';
+ if(!M.joy&&inJoyZone(e.clientX,e.clientY)){M.joy={id:e.pointerId,x0:e.clientX,y0:e.clientY,x:e.clientX,y:e.clientY};return}
+ M.digId=e.pointerId;M.dig={x:e.clientX/MTs,y:e.clientY/MTs};M.atkT=0});
+mcv.addEventListener('pointermove',e=>{if(!M)return;if(M.joy&&e.pointerId===M.joy.id){M.joy.x=e.clientX;M.joy.y=e.clientY;return}if(M.dig&&e.pointerId===M.digId)M.dig={x:e.clientX/MTs,y:e.clientY/MTs}});
+['pointerup','pointercancel'].forEach(ev=>mcv.addEventListener(ev,e=>{if(!M)return;if(M.joy&&e.pointerId===M.joy.id){M.joy=null;return}if(e.pointerId===M.digId)M.dig=null}));
 $('#mexit').addEventListener('click',exitMine);
 addEventListener('keydown',e=>{if(!M)return;if(e.key==='ArrowLeft'||e.key==='a')M.keys.L=true;if(e.key==='ArrowRight'||e.key==='d')M.keys.R=true;if(e.key===' '||e.key==='ArrowUp'||e.key==='w')M.keys.J=true});
 addEventListener('keyup',e=>{if(!M)return;if(e.key==='ArrowLeft'||e.key==='a')M.keys.L=false;if(e.key==='ArrowRight'||e.key==='d')M.keys.R=false;if(e.key===' '||e.key==='ArrowUp'||e.key==='w')M.keys.J=false});

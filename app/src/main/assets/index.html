@@ -97,7 +97,7 @@ canvas{position:absolute;top:0;touch-action:none}
 <script>
 "use strict";
 const $=s=>document.querySelector(s);
-const WORLD=64,CH=8,NCH=8,SP=0.5,SAVE_KEY='pepperfarm_v1';
+const WORLD=64,WH=96,CH=8,NCH=8,NCHY=12,DROW=8,SP=0.5,BELT_FEE=50,SAVE_KEY='pepperfarm_v1';
 const DX=[1,0,-1,0],DY=[0,1,0,-1];
 
 /* ---------------- data ---------------- */
@@ -121,7 +121,7 @@ const BT={
  bank:{name:'Seed Bank',icon:'🌰',cost:200,col:'#8d5a2b',out:1,pw:2,desc:'Automatically sends seeds of the variety you pick onto its belt. Your first bank is a tap bank: tap it to push seeds out.'},
  farm:{name:'Farm Plot',icon:'🌱',cost:60,col:'#4f7f2a',out:1,desc:'Takes seeds, grows peppers, sends them out.'},
  market:{name:'Market',icon:'🏪',cost:300,col:'#2f8f4e',desc:'Sells peppers for coins. Better quality = more coins.'},
- taste:{name:'Customers',icon:'😋',cost:150,col:'#c0602f',desc:'Customers taste peppers. Better reaction = more seeds + tips.'},
+ taste:{name:'Customers',icon:'😋',cost:150,col:'#c0602f',desc:'Must sit next to a Market. Customers buy peppers at that market\'s price, leave a review, and give seeds back: the better they like it, the more seeds.'},
  cross:{pw:4,name:'Pollination Warehouse',icon:'🐝',cost:500,col:'#7a6a55',out:1,desc:'An indoor farm where bees cross pairs of peppers into seeds. Bacteria can\'t get in. Pairs of your newest variety research the next one.'},
  store:{pw:1,name:'Storage',icon:'📦',cost:120,col:'#6d4a2b',out:1,desc:'Saves up product. Hold it, or release it down its belt.'},
  sort:{pw:1,name:'Quality Sorter',icon:'🔍',cost:250,col:'#3d6fb0',out:1,desc:'Good peppers go straight out. Low-star and infected ones go out the sides.'},
@@ -132,13 +132,27 @@ const BT={
  solar:{gen:1,name:'Solar Panel',icon:'🔆',cost:800,col:'#1f3b66',desc:'Makes 4 ⚡ in full sun. Less in clouds and rain, none at night. Power Block only.'},
  wind:{gen:1,name:'Wind Turbine',icon:'🌬️',cost:1200,col:'#5d6c7c',desc:'Makes 6 ⚡. Spins harder in rain and storms, slower in a heat wave. Power Block only.'},
  bio:{gen:1,name:'Biogas Generator',icon:'♨️',cost:2500,col:'#4f5f22',desc:'Burns 💩 manure from your cows: each load gives 20s of 12 ⚡. Power Block only.'},
+ farmers:{name:'Farmers Market',icon:'🧺',cost:250000,col:'#b5651d',desc:'Market District only. Pays ×1.6, plus +10% for every different variety in its last 12 sales. Customers can attach to it too.'},
+ ugin:{name:'Tunnel Entrance',icon:'🕳️',cost:0,col:'#33363d',desc:'Belt goes underground here and comes up at the matching exit. Made automatically when you drag a belt across another belt or a building.'},
+ ugout:{name:'Tunnel Exit',icon:'🕳️',cost:0,col:'#33363d',out:1,desc:'Where an underground belt comes back up.'},
  compost:{name:'Compost Bin',icon:'♻️',cost:40,col:'#4e3b2a',desc:'Destroys anything sent into it. Good for rejects.'}
 };
 const BORDER=['farm','bank','market','taste','cross','store','sort','split','spray','compost'];
+const PERM=[
+ {id:'pval',name:'Family Recipe',icon:'📜',desc:l=>'pepper value ×'+fmt2(Math.pow(1.25,l)),cost:l=>Math.ceil(2*Math.pow(1.5,l))},
+ {id:'pgrow',name:'Heirloom Soil',icon:'🌿',desc:l=>'farm growth ×'+fmt2(Math.pow(1.15,l)),cost:l=>Math.ceil(2*Math.pow(1.5,l))},
+ {id:'ptap',name:'Strong Hands',icon:'👆',desc:l=>'tap power ×'+fmt2(Math.pow(1.3,l)),cost:l=>Math.ceil(1*Math.pow(1.5,l))},
+ {id:'pstack',name:'Big Harvest',icon:'🧺',desc:l=>'+'+l+' peppers per stack',cost:l=>Math.ceil(3*Math.pow(1.7,l))},
+ {id:'pbelt',name:'Express Belts',icon:'⏩',desc:l=>'belt speed ×'+fmt2(Math.pow(1.1,l)),cost:l=>Math.ceil(2*Math.pow(1.5,l))},
+ {id:'pcash',name:'Head Start',icon:'💰',desc:l=>'start each run with 🪙'+fmt(150*Math.pow(5,l)),cost:l=>Math.ceil(1*Math.pow(1.6,l))},
+ {id:'poff',name:'Night Shift',icon:'🌙',desc:l=>'offline earnings '+Math.min(100,50+10*l)+'%',cost:l=>Math.ceil(2*Math.pow(1.6,l)),max:5}];
+const pm=id=>(S.perm&&S.perm[id])||0;
+const stackN=()=>2+(S.up.seedq||0)+pm('pstack');
+const gpGain=()=>Math.max(3,Math.floor(3*Math.sqrt(S.run/presReq())));
 const UP=[
- {id:'seedq',name:'Seed Genetics',icon:'🧬',desc:l=>'+'+3*l+' quality, value ×'+fmt2(Math.pow(1.08,l))+', '+fmt2(Math.pow(1.2,l))+'× work per seed',cost:l=>300*Math.pow(2.2,l),max:1e9},
+ {id:'seedq',name:'Seed Genetics',icon:'🧬',desc:l=>(2+l)+' peppers per stack, +'+3*l+' quality, value ×'+fmt2(Math.pow(1.08,l))+', '+fmt2(Math.pow(1.2,l))+'× work per seed',cost:l=>300*Math.pow(2.2,l),max:1e9},
  {id:'speed',name:'Belt Speed',icon:'⏩',desc:l=>(1+.2*l).toFixed(1)+' tiles/s',cost:l=>60*Math.pow(1.8,l),max:1e9},
- {id:'fert',name:'Fertilizer',icon:'💧',desc:l=>'grow speed ×'+fmt2(1/Math.pow(.88,l)),cost:l=>80*Math.pow(1.9,l),max:1e9},
+ {id:'fert',name:'Fertilizer',icon:'💩',cur:'m',desc:l=>'grow speed ×'+fmt2(1/Math.pow(.88,l))+' (paid in pasture manure)',cost:l=>Math.floor(15*Math.pow(1.55,l)),max:1e9},
  {id:'plots',name:'More Plots',icon:'🪴',desc:l=>(2+l)+' plots per farm',cost:l=>150*Math.pow(2.4,l),max:8},
  {id:'soil',name:'Rich Soil',icon:'🟫',desc:l=>'base quality '+Math.min(100,50+4*l),cost:l=>100*Math.pow(1.9,l),max:1e9},
  {id:'imm',name:'Plant Immunity',icon:'🛡️',desc:l=>Math.min(80,8*l)+'% chance to resist bacteria',cost:l=>120*Math.pow(2,l),max:10},
@@ -153,7 +167,7 @@ const UP=[
 function fresh(){const tiles={},put=(x,y,o)=>tiles[x+','+y]=o;
  put(27,0,{k:'bank',d:1,v:0,tap:true});for(let y=1;y<4;y++)put(27,y,{k:'belt',d:1});
  put(27,4,{k:'farm',d:1,pl:[],inf:0});for(let y=5;y<15;y++)put(27,y,{k:'belt',d:1});put(27,15,{k:'market',d:1});
- return{v:3,land:['3,0','3,1'],pland:[],dem:V.map(()=>1),vs:V.map(()=>0),evT:200,ev:null,coins:150,run:0,total:0,prest:0,up:Object.fromEntries(UP.map(u=>[u.id,0])),disc:1,res:0,seeds:V.map(()=>0),
+ return{v:4,land:['3,0','3,1'],pland:[],dland:[],gp:0,perm:{},manure:0,rev:[],dem:V.map(()=>1),vs:V.map(()=>0),evT:200,ev:null,coins:150,run:0,total:0,prest:0,up:Object.fromEntries(UP.map(u=>[u.id,0])),disc:1,res:0,seeds:V.map(()=>0),
   tiles,rate:0,t:Date.now(),seen:false,zip:'',zipAsked:false,wxOn:true,ob:75,st:{sold:0,fed:0,cross:0,lost:0}}}
 function load(){try{const r=localStorage.getItem(SAVE_KEY);if(!r)return null;const d=JSON.parse(r),f=fresh();
  if(!d.land&&d.tiles){const nt={};for(const k in d.tiles){const[x,y]=k.split(',').map(Number);nt[(x+24)+','+y]=d.tiles[k]}d.tiles=nt;d.land=['3,0','3,1'];d.v=2}
@@ -161,7 +175,7 @@ function load(){try{const r=localStorage.getItem(SAVE_KEY);if(!r)return null;con
 let S=load()||fresh();
 function fixSave(){const banks=Object.values(S.tiles).filter(t=>t.k==='bank');if(banks.length&&!banks.some(t=>t.tap))banks[0].tap=true;
  for(const t of Object.values(S.tiles))if(t.k==='barn'&&!t.herd){t.herd=[];for(let i=0;i<(t.cows||1);i++)t.herd.push(ADULT)}
- if(!S.dem||S.dem.length<V.length)S.dem=V.map((_,i)=>(S.dem&&S.dem[i])||1);if(!S.vs)S.vs=V.map(()=>0);if(!S.pland)S.pland=[];S.v=3}
+ if(!S.dem||S.dem.length<V.length)S.dem=V.map((_,i)=>(S.dem&&S.dem[i])||1);if(!S.vs)S.vs=V.map(()=>0);if(!S.pland)S.pland=[];if(!S.dland)S.dland=[];if(!S.perm)S.perm={};if(!S.rev)S.rev=[];S.gp=S.gp||0;S.manure=S.manure||0;S.v=4}
 function save(){S.t=Date.now();S.rate=perSec();try{localStorage.setItem(SAVE_KEY,JSON.stringify(S))}catch(e){}}
 
 /* ---------------- derived ---------------- */
@@ -180,14 +194,17 @@ function calcPower(){let s=0,d=0,mr=0;for(const k in S.tiles){const t=S.tiles[k]
  PW={sup:s,dem:d,f:d<=0?1:s>=d?1:Math.max(.1,s/d)};mktRec=Math.pow(1.15,mr);
  if(PW.f<1&&!lowPwWarned){lowPwWarned=true;toast('⚡ Not enough power! Machines are running slow. Buy a ⚡ Power Block and build generators.')}if(PW.f>=1)lowPwWarned=false}
 const pf=t=>pwUse(t)>0?PW.f:1;
-const speed=()=>1+.2*S.up.speed;
+const speed=()=>(1+.2*S.up.speed)*Math.pow(1.1,pm('pbelt'));
 const growT=t=>V[t].g*Math.pow(.88,S.up.fert);
 const plots=()=>2+S.up.plots;
 const armP=l=>1.2*Math.pow(.85,l);
 const sprayPen=l=>15*Math.pow(.8,l);
 const stars=q=>Math.max(1,Math.min(5,Math.ceil(q/20)));
-const vmult=()=>Math.pow(1.25,S.up.hype)*Math.pow(1.5,S.prest)*Math.pow(1.08,S.up.seedq||0);
-const price=(it,mk)=>it.m?.5*vmult():it.s?V[it.t].val*.2*vmult():V[it.t].val*(.4+1.2*it.q/100)*vmult()*(it.inf?.1:1)*(S.dem[it.t]||1)*(mk?lvM(mk):1);
+const vmult=()=>Math.pow(1.25,S.up.hype)*Math.pow(1.5,S.prest)*Math.pow(1.08,S.up.seedq||0)*Math.pow(1.25,pm('pval'));
+function mkMult(mk){if(!mk)return 1;let m=lvM(mk)*(mk.dist?1.25:1);if(mk.k==='farmers'){const mix=new Set(mk.mix||[]).size;m*=1.6*(1+.1*mix)}return m}
+const price=(it,mk)=>it.m?.5*vmult():it.s?V[it.t].val*.2*vmult():V[it.t].val*(.4+1.2*it.q/100)*vmult()*(it.inf?.1:1)*(S.dem[it.t]||1)*mkMult(mk)*(it.n||1);
+function adjMarket(x,y){for(let d=0;d<4;d++){const k=K(x+DX[d],y+DY[d]),t=S.tiles[k];if(t&&(t.k==='market'||t.k==='farmers'))return t}return null}
+function sellStats(it){if(it.s||it.m)return;const n=it.n||1;S.dem[it.t]=Math.max(.4,S.dem[it.t]-Math.min(.02,.0015*n));S.vs[it.t]=(S.vs[it.t]||0)+n;S.st.sold+=n}
 const resNeed=()=>3+3*S.disc;
 const presReq=()=>5e5*Math.pow(25,S.prest);
 const STORE_CAP=60;
@@ -199,14 +216,16 @@ function fmt(n){if(!isFinite(n))return'∞';if(n<1000)return n<10?String(Math.fl
  const e=Math.floor(Math.log10(n)/3);let s;if(e<SUF.length)s=SUF[e];else{const k=e-SUF.length;s=String.fromCharCode(97+Math.floor(k/26)%26)+String.fromCharCode(97+k%26)}
  return(Math.floor(n/Math.pow(1000,e)*100)/100).toFixed(2)+s}
 const fmt2=n=>n<100?n.toFixed(2):fmt(n);
-const K=(x,y)=>x+','+y, xy=k=>k.split(',').map(Number), inG=(x,y)=>x>=0&&y>=0&&x<WORLD&&y<WORLD;
+const K=(x,y)=>x+','+y, xy=k=>k.split(',').map(Number), inG=(x,y)=>x>=0&&y>=0&&x<WORLD&&y<WH;
 let LAND=new Set();
-let LANDP=new Set();
+let LANDP=new Set(),LANDD=new Set();
+const isDist=(x,y)=>y>=DROW*CH;
 const ck=(x,y)=>Math.floor(x/CH)+','+Math.floor(y/CH);
-const owned=(x,y)=>inG(x,y)&&(LAND.has(ck(x,y))||LANDP.has(ck(x,y)));
+const owned=(x,y)=>inG(x,y)&&(LAND.has(ck(x,y))||LANDP.has(ck(x,y))||LANDD.has(ck(x,y)));
 const isPw=(x,y)=>inG(x,y)&&LANDP.has(ck(x,y));
-function buyable(cx,cy){const o=k=>LAND.has(k)||LANDP.has(k);if(cx<0||cy<0||cx>=NCH||cy>=NCH||o(K(cx,cy)))return false;return[[1,0],[-1,0],[0,1],[0,-1]].some(([a,b])=>o(K(cx+a,cy+b)))}
+function buyable(cx,cy){const o=k=>LAND.has(k)||LANDP.has(k)||LANDD.has(k);if(cx<0||cy<0||cx>=NCH||cy>=NCHY||o(K(cx,cy)))return false;if(cy===DROW)return true;return[[1,0],[-1,0],[0,1],[0,-1]].some(([a,b])=>o(K(cx+a,cy+b)))}
 const landCost=()=>Math.floor(25000*Math.pow(2.4,S.land.length+S.pland.length-2));
+const distCost=()=>Math.floor(50000*Math.pow(2.2,S.dland.length));
 const tileAt=(x,y)=>S.tiles[K(x,y)];
 
 /* ---------------- weather ---------------- */
@@ -237,19 +256,20 @@ const wxQ=()=>wxOn()?WXT[WX.type].q:0;
 const wxBact=()=>wxOn()?WXT[WX.type].b:1;
 
 /* ---------------- geometry ---------------- */
-let BI={},GEO={},PROT=new Set(),RR={};
+let UGL={},SIMT=0,BI={},GEO={},PROT=new Set(),RR={};
 const nrm=d=>[-DY[d],DX[d]];
 function geom(x,y,i,o,L){const cx=x+.5,cy=y+.5,E=[cx-DX[i]*.5,cy-DY[i]*.5],X=[cx+DX[o]*.5,cy+DY[o]*.5],ni=nrm(i),no=nrm(o);
  const mk=d=>{const c=i===o?[no[0]*d,no[1]*d]:[(ni[0]+no[0])*d,(ni[1]+no[1])*d];return[[E[0]+ni[0]*d,E[1]+ni[1]*d],[cx+c[0],cy+c[1]],[X[0]+no[0]*d,X[1]+no[1]*d]]};
  const g={l:[],dv:[],c:mk(0)};for(let l=0;l<L;l++)g.l.push(mk(((l+.5)/L-.5)*.76));for(let l=1;l<L;l++)g.dv.push(mk((l/L-.5)*.76));return g}
 function feeds(nb,s){return nb&&nb.d===s&&(nb.k==='belt'||BT[nb.k].out)}
-function rebuild(){const L=lanes();LAND=new Set(S.land);LANDP=new Set(S.pland);
+function rebuild(){const L=lanes();LAND=new Set(S.land);LANDP=new Set(S.pland);LANDD=new Set(S.dland);
  for(const k in BI)if(!S.tiles[k]||S.tiles[k].k!=='belt')delete BI[k];
- GEO={};PROT=new Set();
+ GEO={};PROT=new Set();UGL={};
  for(const k in S.tiles){const t=S.tiles[k],[x,y]=xy(k);
   if(t.k==='belt'){if(!BI[k])BI[k]=[];while(BI[k].length<L)BI[k].push([]);
    let ind=t.d;if(!feeds(tileAt(x-DX[t.d],y-DY[t.d]),t.d)){for(const s of[(t.d+1)%4,(t.d+3)%4])if(feeds(tileAt(x-DX[s],y-DY[s]),s)){ind=s;break}}
    GEO[k]=geom(x,y,ind,t.d,L)}
+  if(t.k==='ugin'){for(let j=1;j<=8;j++){const ok=K(x+DX[t.d]*j,y+DY[t.d]*j),o=S.tiles[ok];if(o&&o.k==='ugout'&&o.d===t.d){UGL[k]=ok;break}if(o&&o.k==='ugin'&&o.d===t.d)break}}
   if(t.k==='spray')for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)PROT.add(K(x+a,y+b))}
  renderPicker()}
 function posAt(g,l,p){const[E,C,X]=g.l[l],u=1-p;return[u*u*E[0]+2*u*p*C[0]+p*p*X[0],u*u*E[1]+2*u*p*C[1]+p*p*X[1]]}
@@ -265,10 +285,11 @@ function accept(t,k,it,d){
  switch(t.k){
   case'farm':if(it.m){if((t.fz||0)>=150)return false;t.fz=(t.fz||0)+30;return true}
    if(!it.s||t.pl.length>=fPlots(t))return false;t.pl.push({t:it.t,g:0});return true;
-  case'market':{const g=price(it,t);earn(g);S.st.sold++;if(!it.s&&!it.m){S.dem[it.t]=Math.max(.4,S.dem[it.t]-.003);S.vs[it.t]++}fl(k,'+'+fmt(g),'#ffc83d');return true}
+  case'market':case'farmers':{const g=price(it,t);earn(g);sellStats(it);if(t.k==='farmers'&&!it.s&&!it.m){t.mix=t.mix||[];t.mix.push(it.t);if(t.mix.length>12)t.mix.shift()}fl(k,'+'+fmt(g),'#ffc83d');return true}
+  case'ugin':{const ok=UGL[k];if(!ok)return false;const o=S.tiles[ok];o.q=o.q||[];if(o.q.length>=4)return false;const[a,b]=xy(k),[c,e]=xy(ok);it.eta=SIMT+(Math.abs(c-a)+Math.abs(e-b))/speed();o.q.push(it);return true}
   case'bio':if(!it.m||(t.fuel||0)>=120)return false;t.fuel=(t.fuel||0)+20;return true;
-  case'barn':if(it.s||it.m||(t.mq||0)>=12+4*lvl(t))return false;t.mq=(t.mq||0)+1;if(Math.random()<.3)fl(k,'🐄 munch','#ffe2c4');return true;
-  case'taste':if(it.s||it.m||(t.q=t.q||[]).length>=2)return false;t.q.push(it);return true;
+  case'barn':if(it.s||it.m||(t.mq||0)>=12+4*lvl(t))return false;t.mq=(t.mq||0)+1;S.manure=(S.manure||0)+1;if(Math.random()<.3)fl(k,'🐄 munch','#ffe2c4');return true;
+  case'taste':{const[tx,ty]=xy(k);if(it.s||it.m||!adjMarket(tx,ty)||(t.q=t.q||[]).length>=2)return false}t.q.push(it);return true;
   case'cross':if(it.s||it.m||(t.q=t.q||[]).length>=2*(1+S.up.bays))return false;t.q.push(it);return true;
   case'store':if((t.c=t.c||[]).length>=STORE_CAP*lvM(t))return false;t.c.push(it);return true;
   case'sort':case'split':if(t.buf)return false;t.buf=it;return true;
@@ -285,11 +306,15 @@ function perSec(){const k=Math.min(secs,59)+secAcc;if(k<1)return 0;let s=0;for(c
 /* ---------------- buildings ---------------- */
 function emit(t,x,y,it,dirs){const n=dirs.length,r=t.rr||0;for(let i=0;i<n;i++){const d=dirs[(r+i)%n];if(push(x,y,d,it)){t.rr=(r+i+1)%n;return true}}return false}
 function harvestQ(k,hy){let q=50+4*S.up.soil+3*(S.up.seedq||0)+(Math.random()*30-15)+(hy?0:wxQ());if(PROT.has(k))q-=sprayPen(S.up.eco);return Math.round(Math.max(1,Math.min(100,q)))}
-function react(t,k,it){let n,e;
+const REVT={'😍':['Best {v} I\'ve ever had!','Absolutely perfect {v}.','Five stars, buying more!'],'🥵':['Hot and amazing {v}!','Melted my face, loved it.','Perfect burn. Five stars!'],
+ '😋':['Really good {v}.','Tasty! Would buy again.','Solid {v}.'],'🔥':['Nice heat on this {v}.','Spicy and fresh!','Great kick.'],'😐':['It\'s okay.','Average {v}.','Not bad, not great.'],
+ '😖':['Pretty bland.','A bit mushy.','Wouldn\'t buy again.'],'🤢':['Ew, it was moldy!','Something was wrong with it.','Got sick. One star.']};
+const REVS={'😍':5,'🥵':5,'😋':4,'🔥':4,'😐':3,'😖':2,'🤢':1};
+function react(t,k,it){let n,e;const[tx,ty]=xy(k),mk=adjMarket(tx,ty);if(mk){earn(price(it,mk));sellStats(it)}
  if(it.inf){n=0;e='🤢'}else{const sc=it.q+(Math.random()*40-20)+5*S.up.charm,hot=it.t>=7;
   if(sc>=85){n=3;e=hot?'🥵':'😍'}else if(sc>=65){n=2;e=hot?'🔥':'😋'}else if(sc>=45){n=1;e='😐'}else{n=0;e='😖'}}
  if(it.t>0)S.seeds[it.t]+=n;const tip=n*V[it.t].val*.15*vmult();if(tip>0)earn(tip);S.st.fed++;
- fl(k,e+(n&&it.t>0?' +'+n+'🌰':''),'#fff')}
+ fl(k,e+(n&&it.t>0?' +'+n+'🌰':''),'#fff');const tl=REVT[e];S.rev.unshift({e,t:it.t,s:REVS[e],x:tl[Math.floor(Math.random()*tl.length)].replace('{v}',V[it.t].n)});if(S.rev.length>12)S.rev.length=12}
 function crossPair(k,a,b){
  if(a.inf||b.inf){fl(k,'🦠 ruined','#c79bff');return}
  const top=Math.max(a.t,b.t);if(top>0)S.seeds[top]+=2;S.st.cross++;
@@ -297,6 +322,7 @@ function crossPair(k,a,b){
   if(S.res>=resNeed()){S.res=0;S.disc++;S.seeds[S.disc-1]+=5;toast('🎉 New variety: '+V[S.disc-1].n+'! +5 seeds');flashT=.6;save()}}
  fl(k,top>0?'+2🌰':'🐝','#ffe08a')}
 function updB(t,k,dt){const[x,y]=xy(k);
+ if(t.k==='ugout'){if(t.q&&t.q.length&&t.q[0].eta<=SIMT&&push(x,y,t.d,t.q[0]))t.q.shift();return}
  switch(t.k){
   case'bank':{const L=lanes();
    if(t.tap){t.tp=Math.max(0,(t.tp||0)-dt*5);for(let i=0;i<L&&(t.sq||0)>0;i++){const l=((t.rl||0)+i)%L;if(t.v>0&&S.seeds[t.v]<=0)break;
@@ -307,8 +333,8 @@ function updB(t,k,dt){const[x,y]=xy(k);
     if(push(x,y,t.d,{s:1,t:t.v,q:0,inf:false},l)){t.a[l]-=1;if(t.v>0)S.seeds[t.v]--}else t.a[l]=1}break}
   case'farm':{if(t.inf>0)t.inf=Math.max(0,t.inf-dt);if(t.fz>0)t.fz=Math.max(0,t.fz-dt);
    for(let i=0;i<t.pl.length;i++){const p=t.pl[i];
-    if(p.g<1){p.g+=dt*(t.fz>0?2:1)*lvM(t)*(t.hy?pf(t):wxGrow(p.t))/(growT(p.t)*(t.hy?.4:1));continue}
-    if(!p.it)p.it={s:0,t:p.t,q:t.inf>0?5:harvestQ(k,t.hy),inf:t.inf>0};
+    if(p.g<1){p.g+=dt*(t.fz>0?2:1)*lvM(t)*Math.pow(1.15,pm('pgrow'))*(t.hy?pf(t):wxGrow(p.t))/(growT(p.t)*(t.hy?.4:1));continue}
+    if(!p.it)p.it={s:0,t:p.t,q:t.inf>0?5:harvestQ(k,t.hy),inf:t.inf>0,n:stackN()};
     if(emit(t,x,y,p.it,[t.d])){t.pl.splice(i,1);i--}}break}
   case'taste':if(t.q&&t.q.length){t.tm=(t.tm||0)+dt*lvM(t);if(t.tm>=1.2){t.tm=0;react(t,k,t.q.shift())}}break;
   case'cross':{t.sl=t.sl||[];while(t.sl.length<1+S.up.bays&&t.q&&t.q.length>=2){const p=t.q.splice(0,2);t.sl.push({a:p[0],b:p[1],g:0})}
@@ -318,7 +344,7 @@ function updB(t,k,dt){const[x,y]=xy(k);
    if(pass?push(x,y,t.d,it):emit(t,x,y,it,[(t.d+3)%4,(t.d+1)%4]))t.buf=null;else t.cd=0}break;
   case'barn':{if(!t.herd)t.herd=[ADULT];t.mq=t.mq||0;let ad=0;for(let i=0;i<t.herd.length;i++){if(t.herd[i]<ADULT)t.herd[i]=Math.min(ADULT,t.herd[i]+dt);else ad++}
    t.bt=Math.min(45,(t.bt||0)+dt);if(ad>=2&&t.herd.length<barnCap(t)&&t.bt>=45){t.bt=0;t.herd.push(0);fl(k,'🐮 A calf is born!','#ffe2c4')}
-   t.mt=(t.mt||0)+dt*ad/8*lvM(t)*pf(t);if(t.mt>=1){t.mt-=1;if(t.mq<12+4*lvl(t))t.mq++}
+   t.mt=(t.mt||0)+dt*ad/8*lvM(t)*pf(t);if(t.mt>=1){t.mt-=1;S.manure=(S.manure||0)+1;if(t.mq<12+4*lvl(t))t.mq++}
    if(t.mq>0&&push(x,y,t.d,{m:1,t:0,q:0,inf:false}))t.mq--;break}
   case'arm':{const P=armP(S.up.arm)/(lvM(t)*pf(t));if(t.ret>0)t.ret=Math.max(0,t.ret-dt/(P*.5));
    if(!t.h){if(!(t.ret>0)){const it=take(x-DX[t.d],y-DY[t.d]);if(it){t.h=it;t.ph=0}}}
@@ -330,7 +356,7 @@ function take(sx,sy){const k=K(sx,sy),st=S.tiles[k];if(!st)return null;
  switch(st.k){
   case'belt':{const ls=BI[k];if(!ls)return null;let bl=-1,bp=-1;for(let l=0;l<ls.length;l++){const a=ls[l];if(a.length&&a[0].p>bp){bp=a[0].p;bl=l}}return bl<0?null:ls[bl].shift()}
   case'store':return st.c&&st.c.length?st.c.shift():null;
-  case'farm':for(let i=0;i<st.pl.length;i++){const p=st.pl[i];if(p.g>=1){st.pl.splice(i,1);return p.it||{s:0,t:p.t,q:st.inf>0?5:harvestQ(k,st.hy),inf:st.inf>0}}}return null;
+  case'farm':for(let i=0;i<st.pl.length;i++){const p=st.pl[i];if(p.g>=1){st.pl.splice(i,1);return p.it||{s:0,t:p.t,q:st.inf>0?5:harvestQ(k,st.hy),inf:st.inf>0,n:stackN()}}}return null;
   case'barn':if(st.mq>0){st.mq--;return{m:1,t:0,q:0,inf:false}}return null;
   case'sort':case'split':if(st.buf){const b=st.buf;st.buf=null;return b}return null;
  }return null}
@@ -341,7 +367,7 @@ function outbreak(){S.ob=40+Math.random()*50;const farms=Object.keys(S.tiles).fi
  S.st.lost+=t.pl.length;t.pl=[];t.inf=25;flashT=.8;toast('🦠 Bacteria hit a farm! Crops destroyed — its peppers come out infected for 25s')}
 
 /* ---------------- step ---------------- */
-function step(dt){const L=lanes(),mv=speed()*dt;
+function step(dt){SIMT+=dt;const L=lanes(),mv=speed()*dt;
  for(const k in BI){const t=S.tiles[k];if(!t||t.k!=='belt')continue;const[x,y]=xy(k),ls=BI[k];
   for(let l=0;l<L&&l<ls.length;l++){const a=ls[l];
    for(let i=0;i<a.length;i++){const it=a[i],lim=i===0?1:a[i-1].p-SP;if(lim>it.p)it.p=Math.min(it.p+mv,lim)}
@@ -362,7 +388,8 @@ const cv=$('#cv'),ctx=cv.getContext('2d');let T=48,W=0,H=0,DPR=1,BASE=48,zoom=1;
 function resize(){const r=$('#wrap').getBoundingClientRect();DPR=Math.min(2,window.devicePixelRatio||1);W=r.width;H=r.height;
  BASE=Math.max(46,Math.min(72,W/8));T=BASE*zoom;cv.style.left='0px';cv.style.width=W+'px';cv.style.height=H+'px';cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);
  if(cam.x<0)home();clampCam()}
-function landBox(){let x0=99,y0=99,x1=-1,y1=-1;[...LAND,...LANDP].forEach(k=>{const[a,b]=xy(k);x0=Math.min(x0,a);y0=Math.min(y0,b);x1=Math.max(x1,a);y1=Math.max(y1,b)});
+function landBox(){return{x0:0,y0:0,x1:WORLD,y1:WH}}
+function landBoxOld(){let x0=99,y0=99,x1=-1,y1=-1;[...LAND,...LANDP].forEach(k=>{const[a,b]=xy(k);x0=Math.min(x0,a);y0=Math.min(y0,b);x1=Math.max(x1,a);y1=Math.max(y1,b)});
  return{x0:Math.max(0,(x0-1)*CH),y0:Math.max(0,(y0-1)*CH),x1:Math.min(WORLD,(x1+2)*CH),y1:Math.min(WORLD,(y1+2)*CH)}}
 function clampCam(){const b=landBox(),x0=b.x0*T,x1=b.x1*T,y0=b.y0*T,y1=b.y1*T;
  cam.x=x1-x0<=W?(x0+x1)/2-W/2:Math.max(x0,Math.min(x1-W,cam.x));cam.y=y1-y0<=H?(y0+y1)/2-H/2:Math.max(y0,Math.min(y1-H,cam.y))}
@@ -409,6 +436,9 @@ function drawB(k,t,now){const[x,y]=xy(k),b=BT[t.k],s=T*.92,px=x*T+T*.04,py=y*T+T
   if(t.fz>0){ctx.fillStyle='rgba(120,255,90,'+(.12+.06*Math.sin(now/300))+')';rr(px,py,s,s,s*.16);ctx.fill();emo('💩',px+s*.13,py+s*.13,s*.2)}
   txt(t.inf>0?'🦠 '+Math.ceil(t.inf)+'s':t.pl.length+'/'+n,cx,py+s*.84,Math.max(7,T*.17),t.inf>0?'#d9a8ff':'#e6ffd0');
   if(t.inf>0){ctx.fillStyle='rgba(150,60,220,'+(.2+.1*Math.sin(now/200))+')';rr(px,py,s,s,s*.16);ctx.fill()}}
+ else if(t.k==='ugin'||t.k==='ugout'){const fw=t.k==='ugout'?t.d:(t.d+2)%4,a0=Math.atan2(DY[fw],DX[fw]);ctx.fillStyle='#111';ctx.beginPath();ctx.arc(cx+DX[fw]*s*.12,cy+DY[fw]*s*.12,s*.3,a0-Math.PI/2,a0+Math.PI/2);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#f2c230';ctx.lineWidth=Math.max(2,s*.06);ctx.beginPath();ctx.arc(cx+DX[fw]*s*.12,cy+DY[fw]*s*.12,s*.3,a0-Math.PI/2,a0+Math.PI/2);ctx.stroke();
+  if(t.k==='ugin'&&!UGL[k])txt('⚠',cx,cy,s*.3,'#ff8a7a');if(t.k==='ugout'&&t.q&&t.q.length)txt(t.q.length,cx,py+s*.84,Math.max(7,T*.15))}
  else if(t.k==='cross'){const n=1+S.up.bays;ctx.fillStyle='#9a8466';ctx.beginPath();ctx.moveTo(px,py+s*.3);ctx.lineTo(cx,py+s*.06);ctx.lineTo(px+s,py+s*.3);ctx.closePath();ctx.fill();
   ctx.fillStyle='#2e3a22';rr(px+s*.1,py+s*.34,s*.8,s*.4,s*.05);ctx.fill();
   for(let i=0;i<n;i++){const q=t.sl&&t.sl[i],ix=px+s*(.18+.64*(n===1?.5:i/(n-1))),iy=py+s*.54;ctx.fillStyle='#4b3620';ctx.beginPath();ctx.arc(ix,iy,s*.07,0,7);ctx.fill();
@@ -446,16 +476,19 @@ function drawB(k,t,now){const[x,y]=xy(k),b=BT[t.k],s=T*.92,px=x*T+T*.04,py=y*T+T
   if(lab)txt(lab,cx,py+s*.84,Math.max(7,T*.17))}
  if(b.out){arrow(cx,cy,t.d,'#ffd84a',T);if(t.k==='sort'){arrow(cx,cy,(t.d+1)%4,'#ff6a5a',T);arrow(cx,cy,(t.d+3)%4,'#ff6a5a',T)}
   if(t.k==='split'){arrow(cx,cy,(t.d+1)%4,'#ffd84a',T);arrow(cx,cy,(t.d+3)%4,'#ffd84a',T)}}
+ if(t.k==='taste'&&!adjMarket(x,y)){txt('⚠ needs market',cx,py+s*.84,Math.max(7,T*.13),'#ff8a7a')}
  if(lvl(t)>0)txt('L'+lvl(t),px+s*.86,py+s*.1,Math.max(7,T*.14),'#9ef07a');
  if(pwUse(t)>0&&PW.f<1&&Math.sin(now/250)>0)emo('⚡',px+s*.12,py+s*.12,s*.2);
  if(selK===k){ctx.strokeStyle='#fff';ctx.lineWidth=3;rr(px-2,py-2,s+4,s+4,s*.18);ctx.stroke()}}
 function draw(now){ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#120d0a';ctx.fillRect(0,0,W,H);
  ctx.setTransform(DPR,0,0,DPR,-cam.x*DPR,-cam.y*DPR);
- const vx0=Math.max(0,Math.floor(cam.x/T)),vy0=Math.max(0,Math.floor(cam.y/T)),vx1=Math.min(WORLD-1,Math.floor((cam.x+W)/T)),vy1=Math.min(WORLD-1,Math.floor((cam.y+H)/T));
- for(let y=vy0;y<=vy1;y++)for(let x=vx0;x<=vx1;x++){const o=owned(x,y);ctx.fillStyle=isPw(x,y)?((x+y)%2?'#35404d':'#303a46'):o?((x+y)%2?'#6b4a2e':'#64452b'):((x+y)%2?'#2f4a26':'#2b4423');ctx.fillRect(x*T,y*T,T+.7,T+.7)}
+ const vx0=Math.max(0,Math.floor(cam.x/T)),vy0=Math.max(0,Math.floor(cam.y/T)),vx1=Math.min(WORLD-1,Math.floor((cam.x+W)/T)),vy1=Math.min(WH-1,Math.floor((cam.y+H)/T));
+ for(let y=vy0;y<=vy1;y++)for(let x=vx0;x<=vx1;x++){const o=owned(x,y),ds=isDist(x,y);ctx.fillStyle=ds?(o?((x+y)%2?'#57575e':'#525259'):((x+y)%2?'#2b2b30':'#28282d')):isPw(x,y)?((x+y)%2?'#35404d':'#303a46'):o?((x+y)%2?'#6b4a2e':'#64452b'):((x+y)%2?'#2f4a26':'#2b4423');ctx.fillRect(x*T,y*T,T+.7,T+.7)}
+ if(vy1>=DROW*CH-1&&vy0<=DROW*CH){const ry=DROW*CH*T;ctx.fillStyle='#1c1c20';ctx.fillRect(0,ry-T*.12,WORLD*T,T*.24);ctx.strokeStyle='#ffd84a';ctx.lineWidth=2;ctx.setLineDash([T*.4,T*.3]);ctx.beginPath();ctx.moveTo(0,ry);ctx.lineTo(WORLD*T,ry);ctx.stroke();ctx.setLineDash([]);
+  for(let i=0;i<4;i++)txt('🏙️ MARKET DISTRICT',(8+i*16)*T,ry+T*.6,Math.max(10,T*.3),'#ffd84a')}
  for(let cy=Math.floor(vy0/CH);cy<=Math.floor(vy1/CH);cy++)for(let cx=Math.floor(vx0/CH);cx<=Math.floor(vx1/CH);cx++){if(!buyable(cx,cy))continue;
   const X0=cx*CH*T,Y0=cy*CH*T,S8=CH*T;ctx.strokeStyle='rgba(255,200,61,.7)';ctx.lineWidth=3;ctx.setLineDash([T*.3,T*.2]);ctx.strokeRect(X0+4,Y0+4,S8-8,S8-8);ctx.setLineDash([]);
-  ctx.fillStyle='#000a';rr(X0+S8/2-T*1.6,Y0+S8/2-T*.6,T*3.2,T*1.2,T*.2);ctx.fill();txt('🪧 Buy land',X0+S8/2,Y0+S8/2-T*.22,Math.max(10,T*.28),'#fff');txt('🪙 '+fmt(landCost()),X0+S8/2,Y0+S8/2+T*.24,Math.max(10,T*.26),S.coins>=landCost()?'#9ef07a':'#ffc83d')}
+  ctx.fillStyle='#000a';rr(X0+S8/2-T*1.6,Y0+S8/2-T*.6,T*3.2,T*1.2,T*.2);ctx.fill();txt(cy>=DROW?'🏙️ Buy lot':'🪧 Buy land',X0+S8/2,Y0+S8/2-T*.22,Math.max(10,T*.28),'#fff');{const lc=cy>=DROW?distCost():landCost();txt('🪙 '+fmt(lc),X0+S8/2,Y0+S8/2+T*.24,Math.max(10,T*.26),S.coins>=lc?'#9ef07a':'#ffc83d')}}
  const showSpray=tool==='build'&&pickK==='spray'||tool==='hand';
  if(showSpray){ctx.fillStyle='rgba(180,110,255,.12)';PROT.forEach(k=>{const[x,y]=xy(k);if(inG(x,y))ctx.fillRect(x*T,y*T,T,T)})}
  const L=lanes();ctx.lineJoin='miter';ctx.lineCap='butt';
@@ -465,9 +498,10 @@ function draw(now){ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#120d0a';ctx
  ctx.strokeStyle='#22252b';ctx.lineWidth=Math.max(1.5,T*.035);for(const[,g]of gs)for(const d of g.dv)poly(d);
  ctx.strokeStyle='#5a606b';ctx.lineWidth=Math.max(2,T*.05);ctx.setLineDash([T*.12,T*.13]);ctx.lineDashOffset=-((now/1000*speed()*T)%(T*.25));
  for(const[,g]of gs)for(const l of g.l)poly(l);ctx.setLineDash([]);ctx.lineDashOffset=0;
+ for(const k in UGL){const[a,b]=xy(k),[c,e]=xy(UGL[k]);ctx.strokeStyle='rgba(255,216,74,.35)';ctx.lineWidth=Math.max(2,T*.06);ctx.setLineDash([T*.15,T*.15]);ctx.beginPath();ctx.moveTo((a+.5)*T,(b+.5)*T);ctx.lineTo((c+.5)*T,(e+.5)*T);ctx.stroke();ctx.setLineDash([])}
  for(const[k,g]of gs){const t=S.tiles[k],c=g.c[2];arrow(c[0]*T-DX[t.d]*T*.5,c[1]*T-DY[t.d]*T*.5,t.d,'#ffffff30',T*.9)}
  const s=Math.min(.5,(.76/L)*.95)*T;
- for(const[k,g]of gs){const ls=BI[k];if(!ls)continue;for(let l=0;l<L&&l<ls.length;l++)for(const it of ls[l]){const[x,y]=posAt(g,l,it.p);drawPep(x*T,y*T,s,it)}}
+ for(const[k,g]of gs){const ls=BI[k];if(!ls)continue;for(let l=0;l<L&&l<ls.length;l++)for(const it of ls[l]){const[x,y]=posAt(g,l,it.p);drawPep(x*T,y*T,s,it);if((it.n||1)>1&&s>=12)txt('x'+it.n,x*T+s*.38,y*T+s*.36,Math.max(8,s*.36),'#fff')}}
  for(const k in S.tiles){const t=S.tiles[k];if(t.k!=='belt')drawB(k,t,now)}
  for(const k in S.tiles){const t=S.tiles[k];if(t.k==='farm'&&t.inf>0){const[x,y]=xy(k);beacon((x+.04)*T+T*.92*.82,(y+.04)*T+T*.92*.16,T*.92,now)}}
  for(const f of floats){ctx.globalAlpha=Math.max(0,Math.min(1,f.t*1.5));txt(f.txt,f.x*T,f.y*T,Math.max(10,T*.25),f.col);ctx.globalAlpha=1}
@@ -485,7 +519,7 @@ function wxFx(now){const ty=WX.type;
 
 /* ---------------- input ---------------- */
 let tool='hand',pickK=null,selK=null,drag=null,cat=null;
-const CATS=[{id:'plant',name:'Planters',icon:'🌱',items:['bank','farm']},{id:'ranch',name:'Ranch',icon:'🐄',items:['barn']},{id:'proc',name:'Processing',icon:'🐝',items:['cross','sort']},{id:'logi',name:'Logistics',icon:'🛤️',items:['arm','split','store','compost']},{id:'sale',name:'Sales',icon:'🏪',items:['market','taste']},{id:'def',name:'Defense',icon:'🛡️',items:['spray']},{id:'power',name:'Power',icon:'⚡',items:['solar','wind','bio']}];
+const CATS=[{id:'plant',name:'Planters',icon:'🌱',items:['bank','farm']},{id:'ranch',name:'Ranch',icon:'🐄',items:['barn']},{id:'proc',name:'Processing',icon:'🐝',items:['cross','sort']},{id:'logi',name:'Logistics',icon:'🛤️',items:['arm','split','store','compost']},{id:'sale',name:'Sales',icon:'🏪',items:['market','taste','farmers']},{id:'def',name:'Defense',icon:'🛡️',items:['spray']},{id:'power',name:'Power',icon:'⚡',items:['solar','wind','bio']}];
 const HINTS={hand:'Tap the TAP bank for seeds. Tap or hold a building to open it. Drag to move, pinch to zoom.',
  belt:'Drag to lay belts (they point the way you drag). Use two fingers to move the map.',
  build:'Pick a category, then a building, then tap a tile. Hold a building button for info and stats.',
@@ -502,7 +536,7 @@ cv.addEventListener('pointerdown',e=>{e.preventDefault();try{cv.setPointerCaptur
  if(ptrs.size===2){if(drag){drag=null;save()}const m=mid();gest={mode:'pinch',d:m.d,z:zoom,wx:(m.x-r.left+cam.x)/T,wy:(m.y-r.top+cam.y)/T};return}
  if(ptrs.size>2)return;
  const[x,y]=cellOf(e);
- if(tool==='belt'&&owned(x,y)){gest={mode:'belt'};const k=K(x,y);drag={x,y};if(!S.tiles[k]){S.tiles[k]={k:'belt',d:S.lastD??1};autoAim(x,y);rebuild()}return}
+ if(tool==='belt'&&inG(x,y)){gest={mode:'belt'};const k=K(x,y);drag={x,y,existed:!!S.tiles[k],moved:false};if(!S.tiles[k]){if(!payBelt(x,y)){drag=null;gest=null;return}S.tiles[k]={k:'belt',d:S.lastD??1};autoAim(x,y);rebuild()}return}
  gest={mode:'tap',sx:e.clientX,sy:e.clientY,cx:cam.x,cy:cam.y,x,y};const g=gest;
  setTimeout(()=>{if(gest===g&&g.mode==='tap'&&ptrs.size===1){const t=S.tiles[K(x,y)];if(t&&t.k!=='belt'&&owned(x,y)){g.mode='done';if(navigator.vibrate)try{navigator.vibrate(15)}catch(_){}openSheet('b',K(x,y))}}},450)});
 cv.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});if(!gest)return;const r=cv.getBoundingClientRect();
@@ -510,20 +544,20 @@ cv.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;ptrs.set(
  if(gest.mode==='tap'||gest.mode==='pan'){const dx=e.clientX-gest.sx,dy=e.clientY-gest.sy;if(gest.mode==='tap'&&Math.hypot(dx,dy)>18)gest.mode='pan';
   if(gest.mode==='pan'){cam.x=gest.cx-dx;cam.y=gest.cy-dy;clampCam()}return}
  if(gest.mode==='belt'&&drag){const[x,y]=cellOf(e);if(!inG(x,y))return;let g=0;
-  while((drag.x!==x||drag.y!==y)&&g++<40){const dx=Math.sign(x-drag.x),dy=Math.sign(y-drag.y),nx=dx?drag.x+dx:drag.x,ny=dx?drag.y:drag.y+dy;if(!owned(nx,ny))break;beltStep(nx,ny)}}});
+  while((drag.x!==x||drag.y!==y)&&g++<40){const dx=Math.sign(x-drag.x),dy=Math.sign(y-drag.y),nx=dx?drag.x+dx:drag.x,ny=dx?drag.y:drag.y+dy;if(!inG(nx,ny)||!drag)break;beltStep(nx,ny);if(!drag)break}}});
 function ptrEnd(e){const had=ptrs.has(e.pointerId);ptrs.delete(e.pointerId);if(!had||!gest)return;
  if(gest.mode==='tap'&&e.type==='pointerup')doTap(gest.x,gest.y);
- if(gest.mode==='belt'&&drag){drag=null;save()}
+ if(gest.mode==='belt'&&drag){if(!drag.moved&&drag.existed&&e.type==='pointerup'){const t=tileAt(drag.x,drag.y);if(t&&t.k==='belt'){t.d=(t.d+1)%4;clearBelt(K(drag.x,drag.y));rebuild();fl(K(drag.x,drag.y),'🔄','#fff')}}drag=null;save()}
  gest=ptrs.size?{mode:'none'}:null}
 cv.addEventListener('pointerup',ptrEnd);cv.addEventListener('pointercancel',ptrEnd);
 cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect();setZoom(zoom*(e.deltaY<0?1.12:.89),e.clientX-r.left,e.clientY-r.top)},{passive:false});
-function tapBank(k,t){t.w=(t.w||0)+lvM(t);let n=0;while(t.w>=seedWork()&&(t.sq||0)<30){t.w-=seedWork();t.sq=(t.sq||0)+1;n++}t.tp=1;if(n)fl(k,'+'+n+'🌰','#ffe9b0');else if((t.sq||0)>=30)fl(k,'full','#ff8a7a')}
+function tapBank(k,t){t.w=(t.w||0)+lvM(t)*Math.pow(1.3,pm('ptap'));let n=0;while(t.w>=seedWork()&&(t.sq||0)<30){t.w-=seedWork();t.sq=(t.sq||0)+1;n++}t.tp=1;if(n)fl(k,'+'+n+'🌰','#ffe9b0');else if((t.sq||0)>=30)fl(k,'full','#ff8a7a')}
 function doTap(x,y){if(!inG(x,y))return;const k=K(x,y),t=S.tiles[k];
- if(!owned(x,y)){const cx=Math.floor(x/CH),cy=Math.floor(y/CH);if(buyable(cx,cy))openSheet('land',K(cx,cy));return}
+ if(!owned(x,y)&&!(t&&(tool==='rot'||tool==='erase'))){const cx=Math.floor(x/CH),cy=Math.floor(y/CH);if(buyable(cx,cy))openSheet('land',K(cx,cy));return}
  if(tool==='hand'){if(t&&t.k==='bank'&&t.tap){tapBank(k,t);return}if(t&&t.k!=='belt')openSheet('b',k);return}
  if(tool==='build')return place(x,y);
  if(tool==='rot'){if(t&&(t.k==='belt'||BT[t.k].out)){t.d=(t.d+1)%4;if(t.k==='belt')clearBelt(k);rebuild();save()}return}
- if(tool==='erase'){if(!t)return;if(!owned(x,y))return;if(t.k!=='belt'){if(countOf('bank')===1&&t.k==='bank'){toast('Keep at least one Seed Bank');return}
+ if(tool==='erase'){if(!t)return;if(!owned(x,y)&&t.k!=='belt')return;if(t.k!=='belt'){if(countOf('bank')===1&&t.k==='bank'){toast('Keep at least one Seed Bank');return}
    const ref=Math.floor(BT[t.k].cost*Math.pow(1.4,countOf(t.k)-1)*.75);S.coins+=ref;toast('Removed '+BT[t.k].name+' (+'+fmt(ref)+')')}
   delete S.tiles[k];rebuild();save()}}
 function clearBelt(k){if(BI[k])BI[k].forEach(a=>a.length=0)}
@@ -532,18 +566,27 @@ function autoAim(x,y){const bt=tileAt(x,y);if(!bt||bt.k!=='belt')return;
   if(!b||b.k==='belt'||!BT[b.k].out||['sort','split','arm'].includes(b.k)||bt.d===(s+2)%4||b.d===s)continue;
   const cur=tileAt(bx+DX[b.d],by+DY[b.d]),curOk=cur&&(cur.k!=='belt'||cur.d!==(b.d+2)%4)&&!(cur.k!=='belt'&&!['market','taste','cross','store','barn','compost','bio','farm','sort','split'].includes(cur.k));
   if(!curOk)b.d=s}}
-function beltStep(nx,ny){const d=nx>drag.x?0:nx<drag.x?2:ny>drag.y?1:3,pt=tileAt(drag.x,drag.y);
+function payBelt(x,y){if(owned(x,y))return true;if(S.coins<BELT_FEE){toast('Belts off your land cost 🪙'+BELT_FEE+' per tile');return false}S.coins-=BELT_FEE;return true}
+function beltStep(nx,ny){const d=nx>drag.x?0:nx<drag.x?2:ny>drag.y?1:3;drag.moved=true;
+ if(drag.ug){const u=drag.ug,nt0=S.tiles[K(nx,ny)],dist=Math.abs(nx-u.x)+Math.abs(ny-u.y);
+  if(d!==u.d||dist>8){drag.ug=null;drag.x=nx;drag.y=ny;return}
+  if(!nt0){if(!payBelt(nx,ny)){drag=null;return}const sk=K(u.x,u.y);clearBelt(sk);S.tiles[sk]={k:'ugin',d};S.tiles[K(nx,ny)]={k:'ugout',d};drag.ug=null;drag.x=nx;drag.y=ny;S.lastD=d;rebuild();toast('🕳️ Belt goes underground');return}
+  if(nt0.k==='belt'&&nt0.d===d){drag.ug=null}drag.x=nx;drag.y=ny;return}
+ const pt=tileAt(drag.x,drag.y),nt1=S.tiles[K(nx,ny)];
+ if(nt1&&pt&&pt.k==='belt'&&((nt1.k==='belt'&&nt1.d!==d&&nt1.d!==(d+2)%4)||(nt1.k!=='belt'))){if(pt.d!==d){pt.d=d;clearBelt(K(drag.x,drag.y))}drag.ug={x:drag.x,y:drag.y,d};autoAim(drag.x,drag.y);drag.x=nx;drag.y=ny;rebuild();return}
  if(pt){if(pt.k==='belt'){if(pt.d!==d){pt.d=d;clearBelt(K(drag.x,drag.y))}}else if(BT[pt.k].out&&pt.k!=='sort'&&pt.k!=='split')pt.d=d}
  S.lastD=d;const nk=K(nx,ny),nt=S.tiles[nk];
- if(!nt)S.tiles[nk]={k:'belt',d};else if(nt.k==='belt'&&nt.d!==d&&nt.d!==(d+2)%4){nt.d=d;clearBelt(nk)}
+ if(!nt){if(!payBelt(nx,ny)){drag=null;rebuild();return}S.tiles[nk]={k:'belt',d}}
  autoAim(drag.x,drag.y);autoAim(nx,ny);drag.x=nx;drag.y=ny;rebuild()}
 function place(x,y){const k=K(x,y),t=S.tiles[k];
  if(t&&t.k!=='belt'){openSheet('b',k);return}
  if(!pickK){toast(cat?'Pick a building first':'Pick a category, then a building');return}
  if(BT[pickK].gen&&!isPw(x,y)){toast('⚡ Generators only go on a Power Block. Buy one from a 🪧 land sign.');return}
  if(!BT[pickK].gen&&isPw(x,y)){toast('⚡ Power Blocks are only for generators and belts');return}
+ if(isDist(x,y)&&!['market','taste','farmers','store','arm','split','sort','compost'].includes(pickK)){toast('🏙️ The Market District is for markets, customers and farmers markets (plus storage and logistics)');return}
+ if(pickK==='farmers'&&!isDist(x,y)){toast('🧺 Farmers Markets can only go in the 🏙️ Market District at the bottom of the map');return}
  const c=bCost(pickK);if(S.coins<c){toast('Need 🪙'+fmt(c)+' for '+BT[pickK].name);return}
- S.coins-=c;const o={k:pickK,d:t?t.d:(S.lastD??1)};if(pickK==='farm'){o.pl=[];o.inf=0}if(pickK==='barn')o.herd=[ADULT];if(pickK==='bank')o.v=0;
+ S.coins-=c;const o={k:pickK,d:t?t.d:(S.lastD??1)};if(pickK==='farm'){o.pl=[];o.inf=0}if(pickK==='barn')o.herd=[ADULT];if(isDist(x,y))o.dist=true;if(pickK==='bank')o.v=0;
  S.tiles[k]=o;rebuild();save();toast(BT[pickK].icon+' '+BT[pickK].name+' built')}
 
 /* ---------------- UI ---------------- */
@@ -565,12 +608,14 @@ function openSheet(k,a){sheetAt=Date.now();sheetKind=k;sheetArg=a;if(k==='b')sel
 function closeSheet(){sheetKind=null;selK=null;$('#ov').style.display='none'}
 $('#ov').addEventListener('click',e=>{if(e.target.id==='ov'&&sheetKind!=='zip'&&Date.now()-sheetAt>450)closeSheet()});
 const X='';
+const buyM=(a,c)=>`<button class="buy" data-a="${a}" data-cm="${c}" style="background:#a0703a;color:#fff">💩 ${fmt(c)}</button>`;
+const buyG=(a,c,mx)=>mx?'<button class="buy max">MAX</button>':`<button class="buy" data-a="${a}" data-cg="${c}" style="background:#ffd84a">🌟 ${fmt(c)}</button>`;
 const buy=(a,c,mx)=>mx?'<button class="buy max">MAX</button>':`<button class="buy" data-a="${a}" data-c="${c}">🪙 ${fmt(c)}</button>`;
 const dot=t=>`<span class="dot" style="background:${V[t].c}"></span>`;
 const seedPrice=t=>V[t].val*1.2*Math.pow(1.25,S.up.hype)*10;
 function render(){const sh=$('#sheet');let h='';
- if(sheetKind==='up'){h=X+'<h2>⬆️ Upgrades</h2>';for(const u of UP){const l=S.up[u.id],mx=l>=u.max;
-   h+=`<div class="row"><div class="ri">${u.icon}</div><div class="rt"><b>${u.name}</b> <small>Lv ${l}</small><div class="rd">${u.desc(l)}${mx?'':' → '+u.desc(l+1)}</div></div>${buy('up:'+u.id,u.cost(l),mx)}</div>`}}
+ if(sheetKind==='up'){h=X+`<h2>⬆️ Upgrades</h2><p style="color:var(--mut)">Pasture manure: 💩 ${fmt(S.manure||0)} (made by cows in your barns)</p>`;for(const u of UP){const l=S.up[u.id],mx=l>=u.max;
+   h+=`<div class="row"><div class="ri">${u.icon}</div><div class="rt"><b>${u.name}</b> <small>Lv ${l}</small><div class="rd">${u.desc(l)}${mx?'':' → '+u.desc(l+1)}</div></div>${u.cur==='m'?buyM('up:'+u.id,u.cost(l)):buy('up:'+u.id,u.cost(l),mx)}</div>`}}
  else if(sheetKind==='seeds'){h=X+'<h2>🌶️ Pepper Varieties</h2><p>Hotter peppers sell for more. Discover the next one by crossing pairs of your newest variety in a 🐝 Pollination Warehouse.</p>';
   V.forEach((v,t)=>{if(t<S.disc){h+=`<div class="row"><div class="ri">${dot(t)}</div><div class="rt"><b>${v.n}</b> ${v.x?'<small>EXPERIMENTAL</small>':''}<div class="rd">${v.shu} SHU • worth ~${fmt(V[t].val*vmult())} • grows ${fmt2(growT(t))}s • seeds: ${t===0?'∞':fmt(S.seeds[t])}</div></div>${t===0?'':buy('seed:'+t,seedPrice(t),false).replace('🪙','10🌰 🪙')}</div>`}
    else if(t===S.disc){h+=`<div class="row"><div class="ri">❓</div><div class="rt"><b>${v.x?'Experimental #'+(t-10):'???'}</b><div class="rd">Research ${fmt2(S.res)} / ${resNeed()} pairs of ${V[t-1].n}</div><div class="bar"><i style="width:${S.res/resNeed()*100}%"></i></div></div></div>`}});
@@ -581,7 +626,9 @@ function render(){const sh=$('#sheet');let h='';
   <div class="stat"><span>Pepper value</span><b>×${fmt2(Math.pow(1.5,S.prest))} → ×${fmt2(Math.pow(1.5,S.prest+1))}</b></div>
   <div class="stat"><span>Earned this run</span><b><span id="prv">${fmt(S.run)}</span> / ${fmt(req)}</b></div>
   <div class="bar"><i id="prb" style="width:${Math.min(100,S.run/req*100)}%"></i></div>
-  <button class="buy wide ${ok?'':'no'}" data-a="pres">${ok?'PRESTIGE NOW':'Keep growing…'}</button>`}
+  <div class="stat"><span>🌟 Golden Peppers you'll earn</span><b>${ok?gpGain():'—'}</b></div>
+  <button class="buy wide ${ok?'':'no'}" data-a="pres">${ok?'PRESTIGE NOW':'Keep growing…'}</button>
+  <h3>🌟 Permanent upgrades (kept forever) — you have 🌟${fmt(S.gp)}</h3>`+PERM.map(u=>{const l=pm(u.id),mx=u.max&&l>=u.max;return`<div class="row"><div class="ri">${u.icon}</div><div class="rt"><b>${u.name}</b> <small>Lv ${l}</small><div class="rd">${u.desc(l)}${mx?'':' → '+u.desc(l+1)}</div></div>${buyG('perm:'+u.id,u.cost(l),mx)}</div>`}).join('')}
  else if(sheetKind==='help'){h=X+`<h2>🌶️ How to play</h2>
   <p><b>Tap the 🌰 TAP bank</b> to send seeds. The faster you tap, the faster they come. Extra seed banks run automatically (they need ⚡ power). Seed Genetics makes better peppers but each seed takes more work, so level your banks up too.</p>
   <p><b>Every building can be leveled up forever</b> from its menu; each level costs more.</p>
@@ -593,6 +640,11 @@ function render(){const sh=$('#sheet');let h='';
   <p>💧 Tap a farm to convert it to <b>Hydroponic</b> for much faster growth.</p>
   <p><b>Bacteria</b> randomly hit farms (a red light spins on infected ones): crops are destroyed and the farm puts out infected 🦠 peppers for a while. Defend with 🛡️ Plant Immunity (natural, no downside) or a 🧴 Pesticide Sprayer (total protection but lower quality).</p>
   <p>🔍 <b>Quality Sorters</b> pass good peppers out the front and kick low-star or infected ones out the sides (send those to ♻️ Compost).</p>
+  <p>🧺 <b>Stacks:</b> each plant yields a stack of peppers (starts at 2). Seed Genetics adds 1 per level.</p>
+  <p>😋 <b>Customers</b> sit next to a market, buy peppers and leave reviews.</p>
+  <p>🏙️ <b>Market District:</b> the bottom 64×32 of the map. Buy lots there for markets (+25%) and Farmers Markets.</p>
+  <p>🕳️ Drag a belt across another belt or a building and it tunnels underneath. In Belt mode, tap a belt to rotate it.</p>
+  <p>💩 <b>Fertilizer</b> upgrades are paid with manure from your pastures.</p>
   <p>🐄 <b>Cow Barn</b> makes manure. Belt it into farms for 2× growth. Feed cows your rejects for more.<br>🦾 <b>Robotic Arms</b> move items from the tile behind them to the tile in front: belt to storage, belt to market, storage to farm.</p>
   <p>🪧 <b>Land:</b> tap a Buy land sign to expand left, right or down, up to 64×64.</p>
   <p><b>Controls:</b> drag with one finger to move the map, pinch or use ＋/－ to zoom. 🛤️ drag to lay belts (they point the way you drag). 🏗️ tap a tile or belt to build. Tap a tool again to go back to Select. 🔄 rotate. Yellow arrows show where things come out.</p>
@@ -603,6 +655,9 @@ function render(){const sh=$('#sheet');let h='';
   h=`<h2>${b.icon} ${b.name}</h2><p>${b.desc}</p><div class="stat"><span>Category</span><b>${catN}</b></div><div class="stat"><span>Cost to build</span><b>🪙 ${fmt(c)}</b></div><div class="stat"><span>You own</span><b>${n}</b></div>
   <div class="stat"><span>Outputs</span><b>${b.out?(k==='sort'?'Front = pass, sides = reject':k==='split'?'Front + both sides':'Where its yellow arrow points'):'None'}</b></div>${infoStats(k)}
   <button class="buy wide" data-a="pick:${k}" data-c="${c}">Build ${b.name}</button>`}
+ else if(sheetKind==='land'&&xy(sheetArg)[1]>=DROW){const c=distCost();h=`<h2>🏙️ Buy a Market District lot</h2><p>An 8×8 lot in the Market District at the bottom of the map. Markets here get a <b>+25% prime-location bonus</b>, and this is the only place for 🧺 Farmers Markets.</p>
+  <div class="stat"><span>District lots owned</span><b>${S.dland.length}</b></div><button class="buy wide" data-a="buyland:dist" data-c="${c}">🏙️ Buy lot — 🪙 ${fmt(c)}</button>
+  <p style="color:var(--mut)">Run belts down to it. Belts off your own land cost 🪙${BELT_FEE} per tile, and they go underground automatically when they cross something.</p>`}
  else if(sheetKind==='land'){const c=landCost();h=`<h2>🪧 Buy this land</h2><p>An 8×8 plot (64 tiles) next to your property. Your map can grow to 64×64 tiles. Each plot costs more than the last.</p>
   <div class="stat"><span>Farmland plots</span><b>${S.land.length}</b></div><div class="stat"><span>⚡ Power Blocks</span><b>${S.pland.length}</b></div>
   <button class="buy wide" data-a="buyland:farm" data-c="${c}">🌱 Buy as Farmland — 🪙 ${fmt(c)}</button>
@@ -644,7 +699,8 @@ function render(){const sh=$('#sheet');let h='';
   if(t.k==='store'){h+=`<div class="stat"><span>Stored</span><b>${t.c?t.c.length:0} / ${Math.floor(STORE_CAP*lvM(t))}</b></div><div class="seg"><button class="${t.hold?'':'on'}" data-a="hold:0">▶ Release</button><button class="${t.hold?'on':''}" data-a="hold:1">⏸ Hold</button></div>`}
   if(t.k==='cross')h+=`<div class="stat"><span>Bays working</span><b>${t.sl?t.sl.length:0} / ${1+S.up.bays}</b></div><div class="stat"><span>Waiting peppers</span><b>${t.q?t.q.length:0}</b></div>`;
   if(t.k==='cross'&&S.disc<V.length)h+=`<div class="stat"><span>Researching</span><b>${V[S.disc].x?'Experimental':'???'} (from ${V[S.disc-1].n} pairs)</b></div><div class="bar"><i style="width:${S.res/resNeed()*100}%"></i></div>`;
-  if(t.k==='taste')h+=`<div class="stat"><span>Peppers tasted</span><b>${fmt(S.st.fed)}</b></div><p>😍 3 seeds • 😋 2 • 😐 1 • 😖/🤢 none. Quality and Customer Charm improve reactions.</p>`;
+  if(t.k==='taste'){const[tx,ty]=xy(k),mk=adjMarket(tx,ty);h+=`<div class="stat"><span>Attached to</span><b>${mk?BT[mk.k].icon+' '+BT[mk.k].name:'<span style="color:#ff8a7a">No market! Place it next to one</span>'}</b></div><div class="stat"><span>Peppers bought</span><b>${fmt(S.st.fed)}</b></div><p>😍 3 seeds • 😋 2 • 😐 1 • 😖/🤢 none. Quality and Customer Charm improve reactions.</p>`+revHtml()}
+  if(t.k==='farmers'){const mix=new Set(t.mix||[]).size;h+=`<div class="stat"><span>Variety bonus</span><b>${mix} kinds → ×${fmt2(1.6*(1+.1*mix))}</b></div>`}
   if(t.k==='barn'){const hd=t.herd||[ADULT],A=hd.filter(a=>a>=ADULT).length,cap=barnCap(t),cc=cowCost(hd.length);
    h+=`<div class="stat"><span>Adult cows</span><b>${A}</b></div><div class="stat"><span>Calves</span><b>${hd.length-A}${hd.length>A?' ('+hd.filter(a=>a<ADULT).map(a=>Math.floor(a/ADULT*100)+'%').join(', ')+' grown)':''}</b></div>
    <div class="stat"><span>Barn space</span><b>${hd.length} / ${cap}</b></div><div class="stat"><span>Manure</span><b>${fmt2(A/8*60*lvM(t))}/min • waiting ${t.mq||0}</b></div>
@@ -656,7 +712,7 @@ function render(){const sh=$('#sheet');let h='';
    `<h3>Pepper prices (3★, this market)</h3><div class="stat" style="color:var(--mut);font-size:11px"><span>Variety</span><span>Price • Demand • Sold</span></div>`+
    [...Array(S.disc).keys()].map(i=>{const d=S.dem[i]||1,c=d>1.05?'#9ef07a':d<.85?'#ff8a7a':'#ffc83d',ar=d>1.05?'▲':d<.95?'▼':'•';
     return`<div class="stat"><span>${dot(i)}${V[i].n}</span><b>🪙${fmt(price({t:i,q:60},t))} <span style="color:${c}">${ar}${Math.round(d*100)}%</span> • ${fmt(S.vs[i]||0)}</b></div>`}).join('')+
-   `<p>Selling a lot of one variety drops its demand and price. Demand recovers over time. Spread your sales, or chase a craze. Total sold: ${fmt(S.st.sold)}.</p>`}
+   revHtml()+`<p>Selling a lot of one variety drops its demand and price. Demand recovers over time. Spread your sales, or chase a craze. Total sold: ${fmt(S.st.sold)}.</p>`}
   if(pwUse(t)>0)h+=`<div class="stat"><span>Power use</span><b style="color:${PW.f<1?'#ff8a7a':'#9ef07a'}">⚡ ${fmt2(pwUse(t))} • running ${Math.round(PW.f*100)}%</b></div>`;
   if(b.gen)h+=`<div class="stat"><span>Output now</span><b>⚡ ${fmt2(genOut(t))}</b></div>${t.k==='bio'?`<div class="stat"><span>Fuel</span><b>${Math.ceil(t.fuel||0)}s</b></div>`:''}`;
   if(LVX[t.k])h+=`<div class="row"><div class="ri">⬆️</div><div class="rt"><b>Level ${lvl(t)}</b><div class="rd">${lvDesc(t)}</div></div>${buy('blv',lvCost(t),false)}</div>`;
@@ -670,7 +726,7 @@ function infoStats(k){const st=(a,b)=>`<div class="stat"><span>${a}</span><b>${b
   case'solar':return st('Output','⚡ 4 in sun')+st('Now',WXT[WX.type].i+' ×'+fmt2(SOLW[WX.type]));
   case'wind':return st('Output','⚡ 6')+st('Now',WXT[WX.type].i+' ×'+fmt2(WINDW[WX.type]));
   case'bio':return st('Output','⚡ 12 while fueled')+st('Fuel','20s per 💩');
-  case'farm':return st('Plots',plots()+' (hydroponic +2)')+st('Bell grow time',fmt2(growT(0))+'s')+st('Base quality',50+4*S.up.soil)+st('Hydroponic upgrade','2.5× faster, 🪙 '+fmt(hydroCost()))+st('Weather now',WXT[WX.type].i+' ×'+fmt2(wxGrow(0)));
+  case'farm':return st('Stack size',stackN()+' peppers per plant')+st('Plots',plots()+' (hydroponic +2)')+st('Bell grow time',fmt2(growT(0))+'s')+st('Base quality',50+4*S.up.soil)+st('Hydroponic upgrade','2.5× faster, 🪙 '+fmt(hydroCost()))+st('Weather now',WXT[WX.type].i+' ×'+fmt2(wxGrow(0)));
   case'barn':return st('Manure per adult','7.5/min')+st('Calves','Born every 45s with 2+ adults')+st('Grow up','2 minutes')+st('Fertilizer effect','2× growth, +30s per load');
   case'arm':return st('Speed',fmt2(1/armP(S.up.arm))+' moves/s')+st('Picks from','Belts, storage, farms, barns, sorters');
   case'cross':return st('Pair time','2.5s')+st('Bays per warehouse',1+S.up.bays)+st('Seeds per pair','2')+st('Research',fmt2(S.res)+' / '+resNeed()+' pairs');
@@ -679,9 +735,11 @@ function infoStats(k){const st=(a,b)=>`<div class="stat"><span>${a}</span><b>${b
   case'store':return st('Capacity',STORE_CAP+' items')+st('Release speed','4 items/s');
   case'compost':return st('Takes','Anything');
   case'market':return st('Price boost','×'+fmt2(vmult()))+st('Best pepper now',V[S.disc-1].n+' ~🪙'+fmt(V[S.disc-1].val*vmult()));
-  case'taste':return st('Speed','1 pepper / 1.2s')+st('Rewards','😍 3 seeds • 😋 2 • 😐 1')+st('Charm bonus','+'+5*S.up.charm);
+  case'taste':return st('Placement','Next to a Market or Farmers Market')+st('Speed','1 pepper / 1.2s')+st('Rewards','😍 3 seeds • 😋 2 • 😐 1')+st('Charm bonus','+'+5*S.up.charm);
   case'spray':return st('Covers','3×3 around it')+st('Quality penalty','−'+Math.round(sprayPen(S.up.eco)))+st('Protected farms',[...PROT].filter(x=>S.tiles[x]&&S.tiles[x].k==='farm').length);
  }return''}
+function revHtml(){if(!S.rev.length)return'<h3>Customer reviews</h3><p>No reviews yet. Put 😋 Customers next to a market.</p>';const avg=S.rev.reduce((a,r)=>a+r.s,0)/S.rev.length;
+ return`<h3>Customer reviews — ★ ${avg.toFixed(1)}</h3>`+S.rev.slice(0,6).map(r=>`<div class="stat"><span>${r.e} “${r.x}”</span><b style="font-size:11px">${'★'.repeat(r.s)}</b></div>`).join('')}
 const cowCost=n=>Math.floor(300*Math.pow(1.8,Math.max(0,n-1)));
 function lvDesc(t){const m=lvM(t),n=m*LVX[t.k],f=v=>'×'+fmt2(v);
  switch(t.k){case'bank':return(t.tap?'Tap power ':'Seed output ')+f(m)+' → '+f(n);case'farm':return'Growth '+f(m)+' → '+f(n)+', +1 plot every 3 levels';
@@ -689,12 +747,13 @@ function lvDesc(t){const m=lvM(t),n=m*LVX[t.k],f=v=>'×'+fmt2(v);
   case'market':return'Prices '+f(m)+' → '+f(n)+', faster demand recovery';case'solar':case'wind':case'bio':return'Output '+f(m)+' → '+f(n);
   default:return'Speed '+f(m)+' → '+f(n)}}
 const cureCost=()=>Math.max(50,perSec()*15);
-function refreshSheet(){if(!sheetKind)return;document.querySelectorAll('#sheet [data-c]').forEach(b=>b.classList.toggle('no',S.coins<+b.dataset.c));
+function refreshSheet(){if(!sheetKind)return;document.querySelectorAll('#sheet [data-c]').forEach(b=>b.classList.toggle('no',S.coins<+b.dataset.c));document.querySelectorAll('#sheet [data-cm]').forEach(b=>b.classList.toggle('no',(S.manure||0)<+b.dataset.cm));document.querySelectorAll('#sheet [data-cg]').forEach(b=>b.classList.toggle('no',S.gp<+b.dataset.cg));
  const pv=$('#prv');if(pv){pv.textContent=fmt(S.run);$('#prb').style.width=Math.min(100,S.run/presReq()*100)+'%'}}
 $('#sheet').addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(!b)return;const[a,v]=b.dataset.a.split(':');act(a,v)});
 function act(a,v){const t=sheetKind==='b'?S.tiles[sheetArg]:null;
  if(a==='close')return closeSheet();
- if(a==='up'){const u=UP.find(x=>x.id===v),l=S.up[v],c=u.cost(l);if(l>=u.max||S.coins<c)return;S.coins-=c;S.up[v]++}
+ if(a==='up'){const u=UP.find(x=>x.id===v),l=S.up[v],c=u.cost(l);if(l>=u.max)return;if(u.cur==='m'){if((S.manure||0)<c){toast('Need 💩'+fmt(c)+' pasture manure. Build a 🐄 Cow Barn.');return}S.manure-=c}else{if(S.coins<c)return;S.coins-=c}S.up[v]++}
+ else if(a==='perm'){const u=PERM.find(x=>x.id===v),l=pm(v),c=u.cost(l);if((u.max&&l>=u.max)||S.gp<c)return;S.gp-=c;S.perm[v]=l+1;toast(u.icon+' '+u.name+' Lv '+(l+1))}
  else if(a==='seed'){const c=seedPrice(+v);if(S.coins<c)return;S.coins-=c;S.seeds[+v]+=10}
  else if(a==='pres'){if(S.run<presReq())return;prestige();closeSheet();return}
  else if(a==='bv')t.v=+v;
@@ -709,19 +768,19 @@ function act(a,v){const t=sheetKind==='b'?S.tiles[sheetArg]:null;
  else if(a==='wxon')S.wxOn=v==='1';
  else if(a==='reset'){if(!resetArm){resetArm=true;render();setTimeout(()=>{resetArm=false},4000);return}try{localStorage.removeItem(SAVE_KEY)}catch(e){}S=fresh();S.seen=true;S.zipAsked=true;BI={};rebuild();home();updWx(true);closeSheet();toast('Game reset');save();return}
  else if(a==='pick'){if(tool!=='build')setTool('build');cat=(CATS.find(x=>x.items.includes(v))||{}).id||null;pickK=v;renderPicker();$('#hint').textContent='Tap a tile or belt to place '+BT[v].name+'.';closeSheet();return}
- else if(a==='buyland'){const c=landCost(),[cx,cy]=xy(sheetArg);if(S.coins<c||!buyable(cx,cy))return;S.coins-=c;(v==='power'?S.pland:S.land).push(sheetArg);rebuild();clampCam();toast(v==='power'?'⚡ Power Block bought! Build generators on it.':'🪧 New farmland bought!');save();closeSheet();return}
+ else if(a==='buyland'){const c=v==='dist'?distCost():landCost(),[cx,cy]=xy(sheetArg);if(S.coins<c||!buyable(cx,cy))return;S.coins-=c;(v==='power'?S.pland:v==='dist'?S.dland:S.land).push(sheetArg);rebuild();clampCam();toast(v==='power'?'⚡ Power Block bought! Build generators on it.':'🪧 New farmland bought!');save();closeSheet();return}
  else if(a==='blv'){const c=lvCost(t);if(S.coins<c)return;S.coins-=c;t.lv=lvl(t)+1;toast(BT[t.k].icon+' Level '+t.lv)}
  else if(a==='cow'){const hd=t.herd||(t.herd=[ADULT]),c=cowCost(hd.length);if(hd.length>=barnCap(t)||S.coins<c)return;S.coins-=c;hd.push(ADULT);toast('🐄 New cow!')}
  else if(a==='cure'){const c=cureCost();if(S.coins<c)return;S.coins-=c;t.inf=0;toast('🧪 Farm cured')}
  save();render()}
-function prestige(){S.prest++;S.coins=150;S.run=0;for(const k in S.up)S.up[k]=0;S.seeds=V.map(()=>0);
+function prestige(){S.gp+=gpGain();S.prest++;S.coins=150*Math.pow(5,pm('pcash'));S.run=0;S.manure=0;for(const k in S.up)S.up[k]=0;S.seeds=V.map(()=>0);
  for(const k in S.tiles){const t=S.tiles[k];if(t.k==='farm'){t.pl=[];t.inf=0}delete t.q;delete t.c;delete t.buf;delete t.h;t.mq=0;t.fz=0;t.lv=0;t.sq=0;t.w=0;t.fuel=0;if(t.k==='barn')t.herd=[ADULT]}
  S.dem=V.map(()=>1);
  BI={};rebuild();save();toast('⭐ Prestige '+S.prest+'! Belts now carry '+lanes()+' lanes')}
 $('#bUp').onclick=()=>openSheet('up');$('#bSeeds').onclick=()=>openSheet('seeds');$('#bPr').onclick=()=>openSheet('pr');document.querySelectorAll('#zb button').forEach(b=>b.addEventListener('click',()=>{const z=b.dataset.z;if(z==='home')home();else setZoom(zoom*(z==='in'?1.25:.8),W/2,H/2)}));
 $('#bHelp').onclick=()=>openSheet('help');$('#bSet').onclick=()=>openSheet('set');$('#wxb').onclick=()=>openSheet('wx');$('#pwb').onclick=()=>openSheet('pw');
 function hud(){$('#coinv').innerHTML='🪙 <b>'+fmt(S.coins)+'</b>';const L=lanes();
- $('#rate').textContent=fmt(perSec()*60)+' /min • '+L+' lane'+(L>1?'s':'')+(S.prest?' • ⭐'+S.prest:'');
+ $('#rate').textContent=fmt(perSec()*60)+' /min • '+L+' lane'+(L>1?'s':'')+(S.prest?' • ⭐'+S.prest:'')+(S.gp?' • 🌟'+fmt(S.gp):'');
  $('#bPr').classList.toggle('glow',S.run>=presReq());
  if(S.disc<V.length){$('#resl').textContent='🐝 Next: '+(V[S.disc].x?'Experimental':'???');$('#resb').style.width=S.res/resNeed()*100+'%'}else $('#resl').textContent='🏆 All varieties found';
  const pb=$('#pwb');pb.textContent='⚡'+fmt(PW.sup).replace('.00','')+'/'+fmt(PW.dem).replace('.00','');pb.classList.toggle('low',PW.f<1);
@@ -731,7 +790,7 @@ function hud(){$('#coinv').innerHTML='🪙 <b>'+fmt(S.coins)+'</b>';const L=lane
 /* ---------------- loop ---------------- */
 let last=performance.now(),hudT=0;
 function tick(now){let dt=(now-last)/1000;last=now;if(dt>5){away(dt);dt=0}dt=Math.min(dt,.1);step(dt);draw(now);hudT+=dt;if(hudT>.25){hudT=0;hud()}requestAnimationFrame(tick)}
-function away(sec){const r=S.rate||perSec();if(r<=0)return;const g=Math.min(sec,4*3600)*r*.5;S.coins+=g;S.run+=g;S.total+=g;toast('While away you earned 🪙 '+fmt(g))}
+function away(sec){const r=S.rate||perSec();if(r<=0)return;const g=Math.min(sec,4*3600)*r*Math.min(1,.5+.1*pm('poff'));S.coins+=g;S.run+=g;S.total+=g;toast('While away you earned 🪙 '+fmt(g))}
 document.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});window.addEventListener('resize',resize);
 fixSave();rebuild();resize();setTool('hand');

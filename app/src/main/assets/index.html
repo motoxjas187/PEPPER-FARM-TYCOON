@@ -21,6 +21,9 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family
 #res{margin:0 10px 4px;font-size:11px;color:var(--mut);font-weight:700;display:flex;align-items:center;gap:6px}
 #res .bar{flex:1;margin:0}
 #wrap{flex:1;position:relative;min-height:0;overflow:hidden}
+#brk{position:absolute;left:8px;right:8px;top:8px;z-index:5;display:none;background:#5a0e0ae8;border:2px solid #ff3b2e;border-radius:12px;padding:8px 10px;font-size:12px;color:#fff;box-shadow:0 0 18px #ff3b2e88}
+#brk b{display:block;font-size:15px;margin-bottom:2px}
+#brk div{display:flex;gap:6px;margin-top:6px}#brk button{flex:1;border:none;border-radius:9px;padding:9px;font-weight:900;background:#ffd84a;color:#2a1a00}#brk button+button{background:#fff;color:#5a0e0a}
 #zb{position:absolute;right:8px;bottom:8px;display:flex;flex-direction:column;gap:6px;z-index:3}
 #zb button{width:40px;height:40px;border-radius:50%;border:2px solid var(--line);background:#000b;color:#fff;font-size:20px;font-weight:900;line-height:1}
 canvas{position:absolute;top:0;touch-action:none}
@@ -93,7 +96,7 @@ canvas{position:absolute;top:0;touch-action:none}
     <button class="hb" id="bSet"><span>⚙️</span>Settings</button>
   </div>
   <div id="res"><span id="resl">Next: Banana Pepper</span><div class="bar"><i id="resb"></i></div><button id="wxb">⛅ --°</button><button id="pwb">⚡ 0</button></div>
-  <div id="wrap"><canvas id="cv"></canvas><div id="zb"><button data-z="in">＋</button><button data-z="out">－</button><button data-z="home">🎯</button></div></div>
+  <div id="wrap"><canvas id="cv"></canvas><div id="brk"><b>🔌 BREAKER TRIPPED</b><span>A jam backed up to a source (flashing red), so everything stopped and nothing earns. Fix the jam, then reset.</span><div><button id="brkR">Reset</button><button id="brkC">Clear belts & reset</button></div></div><div id="zb"><button data-z="in">＋</button><button data-z="out">－</button><button data-z="home">🎯</button></div></div>
   <div id="hint"></div>
   <div id="picker"></div>
   <div id="tools">
@@ -111,7 +114,7 @@ canvas{position:absolute;top:0;touch-action:none}
 <script>
 "use strict";
 const $=s=>document.querySelector(s);
-const WORLD=64,WH=96,CH=8,NCH=8,NCHY=12,DROW=8,SP=0.5,BELT_FEE=50,SAVE_KEY='pepperfarm_v1';
+const WORLD=64,WH=96,CH=8,NCH=8,NCHY=12,DROW=8,SP=0.3,BELT_FEE=50,SAVE_KEY='pepperfarm_v1';
 const DX=[1,0,-1,0],DY=[0,1,0,-1];
 
 /* ---------------- data ---------------- */
@@ -131,9 +134,14 @@ const V=[
  {n:'Plasma Pod',shu:'9M',val:190000,g:12,c:'#19d3ff',sh:'lantern',x:1},
  {n:'Void Pepper',shu:'???',val:480000,g:14,c:'#8c5cff',sh:'reaper',x:1}
 ];
+const ING=[{n:'Soil Pellet',e:'🟫',v:1,c:'#9a6634'},{n:'Liquid Feed',e:'💧',v:3,c:'#3fa7ff'},{n:'Grow Tonic',e:'🧪',v:9,c:'#62c94a'},{n:'Vita-Pod',e:'💊',v:28,c:'#ff7ab8'},{n:'Gene Serum',e:'⚗️',v:90,c:'#a77cff'},{n:'Mutagen Core',e:'🔮',v:320,c:'#ff3fd0'}];
+const RCP={mixer:{in:{0:2},out:1,tm:2},brewer:{in:{1:2},out:2,tm:3},encap:{in:{2:1,1:2},out:3,tm:4},lab:{in:{3:1,2:1,1:2},out:4,tm:5},reactor:{in:{4:2,3:1,2:1},out:5,tm:7}};
+const needIng=v=>v<=1?0:v<=3?1:v<=5?2:v<=7?3:v<=10?4:5;
+const SINKS=new Set(['market','farmers','compost','sort','split','ugin']);
+const LASER=new Set(['farm','mixer','brewer','encap','lab','reactor','taste','cross','bio','store']);
 const BT={
  bank:{name:'Seed Bank',icon:'🌰',cost:200,col:'#8d5a2b',out:1,pw:2,desc:'Automatically sends seeds of the variety you pick onto its belt. Your first bank is a tap bank: tap it to push seeds out.'},
- farm:{name:'Farm Plot',icon:'🌱',cost:60,col:'#4f7f2a',out:1,desc:'Takes seeds, grows peppers, sends them out.'},
+ farm:{name:'Farm Plot',icon:'🌱',cost:60,col:'#4f7f2a',out:1,desc:'Its laser grabs a 🌰 seed plus the ingredient that pepper needs from belts touching it. Grows peppers, and its arm puts them on the belt its arrow points to.'},
  market:{name:'Market',icon:'🏪',cost:300,col:'#2f8f4e',desc:'Sells peppers for coins. Better quality = more coins.'},
  taste:{name:'Customers',icon:'😋',cost:150,col:'#c0602f',desc:'Must sit next to a Market. Customers buy peppers at that market\'s price, leave a review, and give seeds back: the better they like it, the more seeds.'},
  cross:{pw:4,name:'Pollination Warehouse',icon:'🐝',cost:500,col:'#7a6a55',out:1,desc:'An indoor farm where bees cross pairs of peppers into seeds. Bacteria can\'t get in. Pairs of your newest variety research the next one.'},
@@ -141,8 +149,14 @@ const BT={
  sort:{pw:1,name:'Quality Sorter',icon:'🔍',cost:250,col:'#3d6fb0',out:1,desc:'Good peppers go straight out. Low-star and infected ones go out the sides.'},
  split:{pw:0.5,name:'Splitter',icon:'🔀',cost:80,col:'#555d6b',out:1,desc:'Takes turns sending items out the front and both sides.'},
  spray:{name:'Pesticide Sprayer',icon:'🧴',cost:200,col:'#7b3fa0',desc:'Protects farms in the 3×3 area around it from bacteria, but lowers their pepper quality.'},
- barn:{pw:1,name:'Cow Barn',icon:'🐄',cost:400,col:'#a8372a',out:1,desc:'Cows make 💩 manure. Belt it into farms for 2× growth (+30s per load, up to 150s). Feed the cows rejected peppers for extra manure.'},
+ barn:{pw:1,name:'Cow Barn',icon:'🐄',cost:400,col:'#a8372a',out:1,desc:'Cows make 💩 manure. Belt it into farms for 2× growth (+30s per load, up to 150s).'},
  arm:{pw:1,name:'Robotic Arm',icon:'🦾',cost:150,col:'#46505f',out:1,desc:'Grabs items from the tile behind it and drops them on the tile its arrow points at: belts, storage, farms, market, anything.'},
+ dock:{name:'Supply Dock',icon:'🚚',cost:500,col:'#2f6f8f',out:1,desc:'Trucks in free 🟫 Soil Pellets and puts them on its belt. Sell them as they are, or turn them into better ingredients.'},
+ mixer:{name:'Feed Mixer',icon:'💧',cost:150,col:'#2d6aa0',out:1,desc:'Lasers 2 🟫 Soil Pellets off belts touching it → 💧 Liquid Feed.'},
+ brewer:{name:'Tonic Brewer',icon:'🧪',cost:1200,col:'#3f8a33',out:1,desc:'2 💧 Liquid Feed → 🧪 Grow Tonic.'},
+ encap:{pw:2,name:'Pod Press',icon:'💊',cost:8000,col:'#a8466e',out:1,desc:'1 🧪 Grow Tonic + 2 💧 Liquid Feed → 💊 Vita-Pod.'},
+ lab:{pw:4,name:'Gene Lab',icon:'⚗️',cost:60000,col:'#6a4fa8',out:1,desc:'1 💊 Vita-Pod + 1 🧪 Grow Tonic + 2 💧 Liquid Feed → ⚗️ Gene Serum.'},
+ reactor:{pw:6,name:'Mutagen Reactor',icon:'🔮',cost:500000,col:'#8a2f7a',out:1,desc:'2 ⚗️ Gene Serum + 1 💊 Vita-Pod + 1 🧪 Grow Tonic → 🔮 Mutagen Core.'},
  solar:{gen:1,name:'Solar Panel',icon:'🔆',cost:800,col:'#1f3b66',desc:'Makes 4 ⚡ in full sun. Less in clouds and rain, none at night. Power Block only.'},
  wind:{gen:1,name:'Wind Turbine',icon:'🌬️',cost:1200,col:'#5d6c7c',desc:'Makes 6 ⚡. Spins harder in rain and storms, slower in a heat wave. Power Block only.'},
  bio:{gen:1,name:'Biogas Generator',icon:'♨️',cost:2500,col:'#4f5f22',desc:'Burns 💩 manure from your cows: each load gives 20s of 12 ⚡. Power Block only.'},
@@ -179,23 +193,23 @@ const UP=[
 
 /* ---------------- state ---------------- */
 function fresh(){const tiles={},put=(x,y,o)=>tiles[x+','+y]=o;
- put(27,0,{k:'bank',d:1,v:0,tap:true});for(let y=1;y<4;y++)put(27,y,{k:'belt',d:1});
- put(27,4,{k:'farm',d:1,pl:[],inf:0});for(let y=5;y<15;y++)put(27,y,{k:'belt',d:1});put(27,15,{k:'market',d:1});
- return{v:4,land:['3,0','3,1'],pland:[],dland:[],gp:0,perm:{},manure:0,rev:[],dem:V.map(()=>1),vs:V.map(()=>0),evT:200,ev:null,coins:150,run:0,total:0,prest:0,up:Object.fromEntries(UP.map(u=>[u.id,0])),disc:1,res:0,seeds:V.map(()=>0),
+ put(27,0,{k:'dock',d:1});for(let y=1;y<15;y++)put(27,y,{k:'belt',d:1});put(27,15,{k:'market',d:1});
+ return{v:6,land:['3,0','3,1'],pland:[],dland:[],gp:0,perm:{},manure:0,rev:[],dem:V.map(()=>1),vs:V.map(()=>0),evT:200,ev:null,coins:150,run:0,total:0,prest:0,up:Object.fromEntries(UP.map(u=>[u.id,0])),disc:1,res:0,seeds:V.map(()=>0),
   tiles,rate:0,t:Date.now(),seen:false,zip:'',zipAsked:false,wxOn:true,ob:75,st:{sold:0,fed:0,cross:0,lost:0}}}
 function load(){try{const r=localStorage.getItem(SAVE_KEY);if(!r)return null;const d=JSON.parse(r),f=fresh();
  if(!d.land&&d.tiles){const nt={};for(const k in d.tiles){const[x,y]=k.split(',').map(Number);nt[(x+24)+','+y]=d.tiles[k]}d.tiles=nt;d.land=['3,0','3,1'];d.v=2}
  return Object.assign(f,d,{up:Object.assign(f.up,d.up),st:Object.assign(f.st,d.st)})}catch(e){return null}}
 let S=load()||fresh();
-function fixSave(){const banks=Object.values(S.tiles).filter(t=>t.k==='bank');if(banks.length&&!banks.some(t=>t.tap))banks[0].tap=true;
+function fixSave(){if((S.v||0)<6&&S.seen){S.tiles=fresh().tiles;S.upd6=true}S.brk=null;
+ const banks=Object.values(S.tiles).filter(t=>t.k==='bank');if(banks.length&&!banks.some(t=>t.tap))banks[0].tap=true;
  for(const t of Object.values(S.tiles))if(t.k==='barn'&&!t.herd){t.herd=[];for(let i=0;i<(t.cows||1);i++)t.herd.push(ADULT)}
- if(!S.dem||S.dem.length<V.length)S.dem=V.map((_,i)=>(S.dem&&S.dem[i])||1);if(!S.vs)S.vs=V.map(()=>0);if(!S.pland)S.pland=[];if(!S.dland)S.dland=[];if(!S.perm)S.perm={};if(!S.rev)S.rev=[];S.gp=S.gp||0;S.manure=S.manure||0;S.rare=S.rare||0;if(!S.mu)S.mu={};if(!S.mis||S.mis.length<3){S.mis=S.mis||[];while(S.mis.length<3)S.mis.push(newMission())}S.v=5}
-function save(){S.t=Date.now();S.rate=perSec();try{localStorage.setItem(SAVE_KEY,JSON.stringify(S))}catch(e){}}
+ if(!S.dem||S.dem.length<V.length)S.dem=V.map((_,i)=>(S.dem&&S.dem[i])||1);if(!S.vs)S.vs=V.map(()=>0);if(!S.pland)S.pland=[];if(!S.dland)S.dland=[];if(!S.perm)S.perm={};if(!S.rev)S.rev=[];S.gp=S.gp||0;S.manure=S.manure||0;S.rare=S.rare||0;if(!S.mu)S.mu={};if(!S.mis||S.mis.length<3){S.mis=S.mis||[];while(S.mis.length<3)S.mis.push(newMission())}S.v=6}
+function save(){S.t=Date.now();S.rate=S.brk?0:perSec();try{localStorage.setItem(SAVE_KEY,JSON.stringify(S))}catch(e){}}
 
 /* ---------------- derived ---------------- */
 const lanes=()=>Math.min(2+S.prest,6);
 const seedWork=()=>Math.pow(1.2,S.up.seedq||0);
-const LVX={bank:1.3,farm:1.12,barn:1.1,arm:1.15,cross:1.15,taste:1.15,store:1.5,market:1.08,sort:1.25,split:1.25,solar:1.2,wind:1.2,bio:1.2};
+const LVX={dock:1.3,mixer:1.2,brewer:1.2,encap:1.2,lab:1.2,reactor:1.2,bank:1.3,farm:1.12,barn:1.1,arm:1.15,cross:1.15,taste:1.15,store:1.5,market:1.08,sort:1.25,split:1.25,solar:1.2,wind:1.2,bio:1.2};
 const lvl=t=>t.lv||0,lvM=t=>Math.pow(LVX[t.k]||1,lvl(t)),lvCost=t=>Math.floor(BT[t.k].cost*1.5*Math.pow(1.7,lvl(t)));
 const fPlots=t=>plots()+(t.hy?2:0)+Math.floor(lvl(t)/3);
 const autoRate=t=>.5*lvM(t)/seedWork();
@@ -217,9 +231,9 @@ const sprayPen=l=>15*Math.pow(.8,l);
 const stars=q=>Math.max(1,Math.min(5,Math.ceil(q/20)));
 const vmult=()=>Math.pow(1.25,S.up.hype)*Math.pow(1.5,S.prest)*Math.pow(1.08,S.up.seedq||0)*Math.pow(1.25,pm('pval'));
 function mkMult(mk){if(!mk)return 1;let m=lvM(mk)*(mk.dist?1.25:1);if(mk.k==='farmers'){const mix=new Set(mk.mix||[]).size;m*=1.6*(1+.1*mix)}return m}
-const price=(it,mk)=>it.m?.5*vmult()*(it.n||1):it.s?V[it.t].val*.2*vmult()*(it.n||1):V[it.t].val*(.4+1.2*it.q/100)*vmult()*(it.inf?.1:1)*(S.dem[it.t]||1)*mkMult(mk)*(it.n||1)*(it.r?5:1);
+const price=(it,mk)=>it.g!==undefined?ING[it.g].v*vmult()*(it.n||1)*mkMult(mk):it.m?.5*vmult()*(it.n||1):it.s?V[it.t].val*.2*vmult()*(it.n||1):V[it.t].val*(.4+1.2*it.q/100)*vmult()*(it.inf?.1:1)*(S.dem[it.t]||1)*mkMult(mk)*(it.n||1)*(it.r?5:1);
 function adjMarket(x,y){for(let d=0;d<4;d++){const k=K(x+DX[d],y+DY[d]),t=S.tiles[k];if(t&&(t.k==='market'||t.k==='farmers'))return t}return null}
-function sellStats(it){if(it.s||it.m)return;const n=it.n||1;S.dem[it.t]=Math.max(.4,S.dem[it.t]-Math.min(.02,.0015*n));S.vs[it.t]=(S.vs[it.t]||0)+n;S.st.sold+=n}
+function sellStats(it){if(it.s||it.m||it.g!==undefined){S.st.sold+=0;return}const n=it.n||1;S.dem[it.t]=Math.max(.4,S.dem[it.t]-Math.min(.02,.0015*n));S.vs[it.t]=(S.vs[it.t]||0)+n;S.st.sold+=n}
 const resNeed=()=>3+3*S.disc;
 const presReq=()=>5e5*Math.pow(25,S.prest);
 const STORE_CAP=60;
@@ -295,23 +309,25 @@ function vfxOut(k,l,it){if(!SRCB)return;const[sx,sy]=xy(SRCB);it.vh=1;VFX.push({
 function insLane(k,l,it){const a=BI[k][l],last=a[a.length-1];if(last&&last.p<SP)return false;it.p=0;a.push(it);vfxOut(k,l,it);return true}
 const canMerge=(a,b)=>!a.vh&&!b.vh&&!!a.s===!!b.s&&!!a.m===!!b.m&&a.t===b.t&&!!a.inf===!!b.inf&&!!a.r===!!b.r&&(a.n||1)+(b.n||1)<=99;
 function insLaneAt(k,l,it,p){const a=BI[k][l];let i=0;while(i<a.length&&a[i].p>=p)i++;if(i>0&&a[i-1].p-p<SP)return false;if(i<a.length&&p-a[i].p<SP)return false;it.p=p;a.splice(i,0,it);vfxOut(k,l,it);return true}
-function push(x,y,d,it,lane){const nx=x+DX[d],ny=y+DY[d],nk=K(nx,ny),nt=S.tiles[nk];if(!nt)return false;
+function push(x,y,d,it,lane,fb){const nx=x+DX[d],ny=y+DY[d],nk=K(nx,ny),nt=S.tiles[nk];if(!nt)return false;
  if(nt.k==='belt'){if(nt.d===(d+2)%4||!BI[nk])return false;const L=lanes();
   const g=GEO[nk];if(nt.d!==d&&g&&g.ind!==d){const n=nrm(nt.d),right=(-DX[d])*n[0]+(-DY[d])*n[1]>0,half=Math.max(1,Math.floor(L/2)),ls=[];
    for(let i=0;i<half;i++)ls.push(right?L-1-i:i);const r=RR[nk+'s']||0;for(let i=0;i<ls.length;i++){const l=ls[(r+i)%ls.length];if(insLaneAt(nk,l,it,.5)){RR[nk+'s']=r+i+1;return true}}return false}
   if(lane!==undefined&&lane<L)return insLane(nk,lane,it);
   const r=RR[nk]||0;for(let i=0;i<L;i++){const l=(r+i)%L;if(insLane(nk,l,it)){RR[nk]=l+1;return true}}return false}
- return accept(nt,nk,it,d)}
+ if(fb&&!SINKS.has(nt.k))return false;return accept(nt,nk,it,d)}
 function accept(t,k,it,d){
  switch(t.k){
-  case'farm':{const n=it.n||1;if(it.m){let u=0;while(u<n&&(t.fz||0)<150){t.fz=(t.fz||0)+30;u++}if(!u)return false;if(u<n){it.n=n-u;return false}return true}
-   const free=fPlots(t)-t.pl.length;if(!it.s||free<=0)return false;const kk=Math.min(n,free);for(let i=0;i<kk;i++)t.pl.push({t:it.t,g:0,r:it.r||0});if(kk<n){it.n=n-kk;return false}return true}
-  case'market':case'farmers':{const g=price(it,t);earn(g);sellStats(it);if(t.k==='farmers'&&!it.s&&!it.m){t.mix=t.mix||[];t.mix.push(it.t);if(t.mix.length>12)t.mix.shift()}fl(k,'+'+fmt(g),'#ffc83d');return true}
+  case'farm':{if(it.m){if((t.fz||0)>=120)return false;t.fz=(t.fz||0)+30;return true}
+   if(it.s){t.sb=t.sb||[];if(t.sb.length+t.pl.length>=fPlots(t))return false;t.sb.push({t:it.t,r:it.r||0});t.lastV=it.t;return true}
+   if(it.g!==undefined){t.inv=t.inv||{};if((t.inv[it.g]||0)>=4)return false;t.inv[it.g]=(t.inv[it.g]||0)+(it.n||1);return true}return false}
+  case'mixer':case'brewer':case'encap':case'lab':case'reactor':{const r=RCP[t.k];if(it.g===undefined||!r.in[it.g])return false;t.inv=t.inv||{};if((t.inv[it.g]||0)>=r.in[it.g]*2)return false;t.inv[it.g]=(t.inv[it.g]||0)+(it.n||1);return true}
+  case'market':case'farmers':{const g=price(it,t);earn(g);sellStats(it);if(t.k==='farmers'&&!it.s&&!it.m&&it.g===undefined){t.mix=t.mix||[];t.mix.push(it.t);if(t.mix.length>12)t.mix.shift()}fl(k,'+'+fmt(g),'#ffc83d');return true}
   case'ugin':{const ok=UGL[k];if(!ok)return false;const o=S.tiles[ok];o.q=o.q||[];if(o.q.length>=4)return false;const[a,b]=xy(k),[c,e]=xy(ok);it.eta=SIMT+(Math.abs(c-a)+Math.abs(e-b))/speed();o.q.push(it);return true}
   case'bio':{if(!it.m)return false;const n=it.n||1;let u=0;while(u<n&&(t.fuel||0)<120){t.fuel=(t.fuel||0)+20;u++}if(!u)return false;if(u<n){it.n=n-u;return false}return true}
-  case'barn':if(it.s||it.m||(t.mq||0)>=12+4*lvl(t))return false;{const n=Math.min(it.n||1,12+4*lvl(t)-(t.mq||0));t.mq=(t.mq||0)+n;S.manure=(S.manure||0)+n;if(n<(it.n||1)){it.n-=n;return false}}if(Math.random()<.3)fl(k,'🐄 munch','#ffe2c4');return true;
-  case'taste':{const[tx,ty]=xy(k);if(it.s||it.m||!adjMarket(tx,ty)||(t.q=t.q||[]).length>=2)return false}t.q.push(it);return true;
-  case'cross':if(it.s||it.m||(t.q=t.q||[]).length>=2*(1+S.up.bays))return false;t.q.push(it);return true;
+  case'barn':return false;
+  case'taste':{const[tx,ty]=xy(k);if(it.s||it.m||it.g!==undefined||!adjMarket(tx,ty)||(t.q=t.q||[]).length>=2)return false}t.q.push(it);return true;
+  case'cross':if(it.s||it.m||it.g!==undefined||(t.q=t.q||[]).length>=2*(1+S.up.bays))return false;t.q.push(it);return true;
   case'store':if((t.c=t.c||[]).length>=STORE_CAP*lvM(t))return false;t.c.push(it);return true;
   case'sort':case'split':if(t.buf)return false;t.buf=it;return true;
   case'compost':if(Math.random()<.3)fl(k,'♻️','#9ccf6a');return true;
@@ -325,7 +341,7 @@ function earn(g){S.coins+=g;S.run+=g;S.total+=g;buckets[bi]+=g}
 function perSec(){const k=Math.min(secs,59)+secAcc;if(k<1)return 0;let s=0;for(const b of buckets)s+=b;return s/k}
 
 /* ---------------- buildings ---------------- */
-function emit(t,x,y,it,dirs){const n=dirs.length,r=t.rr||0;for(let i=0;i<n;i++){const d=dirs[(r+i)%n];if(push(x,y,d,it)){t.rr=(r+i+1)%n;return true}}return false}
+function emit(t,x,y,it,dirs,fb){const n=dirs.length,r=t.rr||0;for(let i=0;i<n;i++){const d=dirs[(r+i)%n];if(push(x,y,d,it,undefined,fb)){t.rr=(r+i+1)%n;return true}}return false}
 function harvestQ(k,hy){let q=50+4*S.up.soil+3*(S.up.seedq||0)+(Math.random()*30-15)+(hy?0:wxQ());if(PROT.has(k))q-=sprayPen(S.up.eco);return Math.round(Math.max(1,Math.min(100,q)))}
 const REVT={'😍':['Best {v} I\'ve ever had!','Absolutely perfect {v}.','Five stars, buying more!'],'🥵':['Hot and amazing {v}!','Melted my face, loved it.','Perfect burn. Five stars!'],
  '😋':['Really good {v}.','Tasty! Would buy again.','Solid {v}.'],'🔥':['Nice heat on this {v}.','Spicy and fresh!','Great kick.'],'😐':['It\'s okay.','Average {v}.','Not bad, not great.'],
@@ -342,8 +358,27 @@ function crossPair(k,a,b){
  if(a.t===S.disc-1&&b.t===S.disc-1&&S.disc<V.length){S.res+=Math.min(1.2,(a.q+b.q)/140)*(a.r||b.r?2:1);
   if(S.res>=resNeed()){S.res=0;S.disc++;S.seeds[S.disc-1]+=5;toast('🎉 New variety: '+V[S.disc-1].n+'! +5 seeds');flashT=.6;save()}}
  fl(k,top>0?'+2🌰':'🐝','#ffe08a')}
+function wants(t,it){if(it.vh)return false;
+ switch(t.k){
+  case'farm':{if(it.m)return(t.fz||0)<90;const sb=t.sb||[],inv=t.inv||{};if(it.s)return sb.length+t.pl.length<fPlots(t);
+   if(it.g!==undefined){if((inv[it.g]||0)>=3)return false;if(sb.some(q=>needIng(q.t)===it.g))return true;let tot=0;for(const g in inv)tot+=inv[g];return!sb.length&&tot<2&&it.g===needIng(t.lastV||0)}return false}
+  case'mixer':case'brewer':case'encap':case'lab':case'reactor':{const r=RCP[t.k];return it.g!==undefined&&!!r.in[it.g]&&((t.inv||{})[it.g]||0)<r.in[it.g]*2}
+  case'taste':{if(it.s||it.m||it.g!==undefined||(t.q||[]).length>=2)return false;const[tx,ty]=xy(t._k);return!!adjMarket(tx,ty)}
+  case'cross':return!it.s&&!it.m&&it.g===undefined&&(t.q||[]).length<2*(1+S.up.bays);
+  case'bio':return!!it.m&&(t.fuel||0)<100;
+  case'store':return(t.c||[]).length<STORE_CAP*lvM(t);
+ }return false}
+function laser(t,k,x,y,dt){t._k=k;t.lzT=Math.min(.5,(t.lzT||0)+dt*lvM(t)*pf(t)*(boostOn()?2:1));if(t.lzT<.35)return;
+ for(let d=0;d<4;d++){if(t.k==='store'&&d===t.d)continue;const bk=K(x+DX[d],y+DY[d]),bt=S.tiles[bk],ls=BI[bk];if(!bt||bt.k!=='belt'||!ls)continue;
+  for(let l=0;l<ls.length;l++){const a=ls[l];for(let i=0;i<a.length;i++){const it=a[i];if(!wants(t,it))continue;const g=GEO[bk],pos=g?posAt(g,l,it.p):[x+DX[d]+.5,y+DY[d]+.5];
+   a.splice(i,1);if(accept(t,k,it,d)){t.lzT=0;VFX.push({o:0,lz:1,x0:pos[0],y0:pos[1],x1:x+.5,y1:y+.5,it,t:0});return}a.splice(i,0,it)}}}}
+function srcBlock(t,k,blocked,x,y,dt){if(blocked&&tileAt(x+DX[t.d],y+DY[t.d]))t.blk=(t.blk||0)+dt;else t.blk=Math.max(0,(t.blk||0)-dt*2);if(t.blk>12&&!S.brk)tripBreaker(k)}
+function tripBreaker(k){S.brk={k};flashT=1.2;if(navigator.vibrate)try{navigator.vibrate([90,60,90])}catch(_){}save()}
+function resetBreaker(clear){if(clear){for(const k in BI)for(const a of BI[k])a.length=0;VFX.length=0;for(const k in S.tiles){const t=S.tiles[k];if(t.k==='ugout')t.q=[]}}
+ S.brk=null;for(const k in S.tiles)S.tiles[k].blk=0;toast(clear?'🔌 Belts cleared, power back on':'🔌 Power back on');save()}
 function updB(t,k,dt){const[x,y]=xy(k);
- if(t.k==='ugout'){if(t.q&&t.q.length&&t.q[0].eta<=SIMT&&push(x,y,t.d,t.q[0]))t.q.shift();return}
+ if(LASER.has(t.k))laser(t,k,x,y,dt);
+ if(t.k==='ugout'){if(t.q&&t.q.length&&t.q[0].eta<=SIMT&&push(x,y,t.d,t.q[0],undefined,true))t.q.shift();return}
  switch(t.k){
   case'bank':{const L=lanes();
    if(t.tap){t.tp=Math.max(0,(t.tp||0)-dt*5);for(let i=0;i<L&&(t.sq||0)>0;i++){const l=((t.rl||0)+i)%L,rr=t.rare&&S.rare>0;if(!rr&&t.v>0&&S.seeds[t.v]<=0)break;
@@ -351,8 +386,9 @@ function updB(t,k,dt){const[x,y]=xy(k);
    const r=autoRate(t)*pf(t);t.a=t.a||[];
    for(let l=0;l<L;l++){t.a[l]=(t.a[l]||0)+r*dt;if(t.a[l]<1)continue;
     const rr=t.rare&&S.rare>0;if(!rr&&t.v>0&&S.seeds[t.v]<=0){t.a[l]=1;continue}
-    if(push(x,y,t.d,{s:1,t:t.v,q:0,inf:false,r:rr?1:0},l)){t.a[l]-=1;if(rr)S.rare--;else if(t.v>0)S.seeds[t.v]--}else t.a[l]=1}break}
-  case'farm':{if(t.inf>0)t.inf=Math.max(0,t.inf-dt);if(t.fz>0)t.fz=Math.max(0,t.fz-dt);
+    if(push(x,y,t.d,{s:1,t:t.v,q:0,inf:false,r:rr?1:0},l)){t.a[l]-=1;if(rr)S.rare--;else if(t.v>0)S.seeds[t.v]--}else{t.a[l]=1;t._bl=1}}srcBlock(t,k,t._bl,x,y,dt);t._bl=0;break}
+  case'farm':{if(t.inf>0)t.inf=Math.max(0,t.inf-dt);if(t.fz>0)t.fz=Math.max(0,t.fz-dt);t.sb=t.sb||[];t.inv=t.inv||{};
+   for(let i=0;i<t.sb.length&&t.pl.length<fPlots(t);i++){const q=t.sb[i],g=needIng(q.t);if((t.inv[g]||0)>0){t.inv[g]--;t.pl.push({t:q.t,g:0,r:q.r});t.sb.splice(i,1);i--}}
    for(let i=0;i<t.pl.length;i++){const p=t.pl[i];
     if(p.g<1){p.g+=dt*(boostOn()?2:1)*(t.fz>0?2:1)*lvM(t)*Math.pow(1.15,pm('pgrow'))*(t.hy?pf(t):wxGrow(p.t))/(growT(p.t)*(t.hy?.4:1));continue}
     if(!p.it)p.it={s:0,t:p.t,q:t.inf>0?5:p.r?100:harvestQ(k,t.hy),inf:t.inf>0,n:stackN(),r:p.r||0};
@@ -361,17 +397,22 @@ function updB(t,k,dt){const[x,y]=xy(k);
   case'cross':{t.sl=t.sl||[];while(t.sl.length<1+S.up.bays&&t.q&&t.q.length>=2){const p=t.q.splice(0,2);t.sl.push({a:p[0],b:p[1],g:0})}
    for(let i=0;i<t.sl.length;i++){const q=t.sl[i];q.g+=dt*lvM(t)*pf(t)/2.5;if(q.g>=1){crossPair(k,q.a,q.b);t.sl.splice(i,1);i--}}break}
   case'store':if(!t.hold&&t.c&&t.c.length){t.tm=(t.tm||0)+dt*pf(t)*Math.pow(1.2,lvl(t));while(t.tm>=.25&&t.c.length){if(emit(t,x,y,t.c[0],[t.d])){t.c.shift();t.tm-=.25}else{t.tm=.25;break}}}break;
-  case'sort':t.cd=Math.max(0,(t.cd||0)-dt*8*lvM(t)*pf(t));if(t.buf&&t.cd<=0){t.cd=1;const it=t.buf,thr=t.thr||3,pass=it.s||it.m||(!it.inf&&stars(it.q)>=thr);
-   if(pass?push(x,y,t.d,it):emit(t,x,y,it,[(t.d+3)%4,(t.d+1)%4]))t.buf=null;else t.cd=0}break;
+  case'sort':t.cd=Math.max(0,(t.cd||0)-dt*8*lvM(t)*pf(t));if(t.buf&&t.cd<=0){t.cd=1;const it=t.buf,thr=t.thr||3,pass=it.s||it.m||it.g!==undefined||(!it.inf&&stars(it.q)>=thr);
+   if(pass?push(x,y,t.d,it,undefined,true):emit(t,x,y,it,[(t.d+3)%4,(t.d+1)%4],true))t.buf=null;else t.cd=0}break;
   case'barn':{if(!t.herd)t.herd=[ADULT];t.mq=t.mq||0;let ad=0;for(let i=0;i<t.herd.length;i++){if(t.herd[i]<ADULT)t.herd[i]=Math.min(ADULT,t.herd[i]+dt);else ad++}
    t.bt=Math.min(45,(t.bt||0)+dt);if(ad>=2&&t.herd.length<barnCap(t)&&t.bt>=45){t.bt=0;t.herd.push(0);fl(k,'🐮 A calf is born!','#ffe2c4')}
    t.mt=(t.mt||0)+dt*ad/8*lvM(t)*pf(t);if(t.mt>=1){t.mt-=1;S.manure=(S.manure||0)+1;if(t.mq<12+4*lvl(t))t.mq++}
-   if(t.mq>0&&push(x,y,t.d,{m:1,t:0,q:0,inf:false}))t.mq--;break}
+   let pu=false;if(t.mq>0){pu=push(x,y,t.d,{m:1,t:0,q:0,inf:false});if(pu)t.mq--}srcBlock(t,k,t.mq>=12+4*lvl(t)&&!pu,x,y,dt);break}
   case'arm':{const P=armP(S.up.arm)/(lvM(t)*pf(t));if(t.ret>0)t.ret=Math.max(0,t.ret-dt/(P*.5));
    if(!t.h){if(!(t.ret>0)){const it=take(x-DX[t.d],y-DY[t.d]);if(it){t.h=it;t.ph=0}}}
    else{t.ph=Math.min(1,(t.ph||0)+dt/(P*.5));if(t.ph>=1&&push(x,y,t.d,t.h)){t.h=null;t.ph=0;t.ret=1}}break}
-  case'split':t.cd=Math.max(0,(t.cd||0)-dt*8*lvM(t)*pf(t));if(t.buf&&t.cd<=0){if(emit(t,x,y,t.buf,[t.d,(t.d+3)%4,(t.d+1)%4])){t.buf=null;t.cd=1}}break;
+  case'split':t.cd=Math.max(0,(t.cd||0)-dt*8*lvM(t)*pf(t));if(t.buf&&t.cd<=0){if(emit(t,x,y,t.buf,[t.d,(t.d+3)%4,(t.d+1)%4],true)){t.buf=null;t.cd=1}}break;
   case'bio':if(t.fuel>0)t.fuel=Math.max(0,t.fuel-dt);break;
+  case'dock':{const L=lanes(),r=.6*lvM(t);t.a=t.a||[];let bl=false;for(let l=0;l<L;l++){t.a[l]=(t.a[l]||0)+r*dt;if(t.a[l]<1)continue;if(push(x,y,t.d,{g:0,q:0,n:1},l))t.a[l]-=1;else{t.a[l]=1;bl=true}}srcBlock(t,k,bl,x,y,dt);break}
+  case'mixer':case'brewer':case'encap':case'lab':case'reactor':{const r=RCP[t.k];t.inv=t.inv||{};t.out=t.out||[];
+   if(!t.cr&&t.out.length<4&&Object.keys(r.in).every(g=>(t.inv[g]||0)>=r.in[g])){for(const g in r.in)t.inv[g]-=r.in[g];t.cr=1;t.cp=0}
+   if(t.cr){t.cp=(t.cp||0)+dt*lvM(t)*pf(t)*(boostOn()?2:1)/r.tm;if(t.cp>=1){t.cr=0;t.cp=0;t.out.push({g:r.out,q:0,n:1})}}
+   if(t.out.length&&emit(t,x,y,t.out[0],[t.d]))t.out.shift();break}
  }}
 function take(sx,sy){const k=K(sx,sy),st=S.tiles[k];if(!st)return null;
  switch(st.k){
@@ -380,6 +421,7 @@ function take(sx,sy){const k=K(sx,sy),st=S.tiles[k];if(!st)return null;
   case'farm':for(let i=0;i<st.pl.length;i++){const p=st.pl[i];if(p.g>=1){st.pl.splice(i,1);return p.it||{s:0,t:p.t,q:st.inf>0?5:p.r?100:harvestQ(k,st.hy),inf:st.inf>0,n:stackN(),r:p.r||0}}}return null;
   case'barn':if(st.mq>0){st.mq--;return{m:1,t:0,q:0,inf:false}}return null;
   case'sort':case'split':if(st.buf){const b=st.buf;st.buf=null;return b}return null;
+  case'mixer':case'brewer':case'encap':case'lab':case'reactor':return st.out&&st.out.length?st.out.shift():null;
  }return null}
 function outbreak(){S.ob=40+Math.random()*50;const farms=Object.keys(S.tiles).filter(k=>S.tiles[k].k==='farm');if(!farms.length)return;
  const k=farms[Math.floor(Math.random()*farms.length)],t=S.tiles[k];
@@ -389,14 +431,16 @@ function outbreak(){S.ob=40+Math.random()*50;const farms=Object.keys(S.tiles).fi
 
 /* ---------------- step ---------------- */
 function step(dt){SIMT+=dt;droneStep(dt);const L=lanes(),mv=speed()*dt;
- for(const k in BI){const t=S.tiles[k];if(!t||t.k!=='belt')continue;const[x,y]=xy(k),ls=BI[k];
+ if(!S.brk)for(const k in BI){const t=S.tiles[k];if(!t||t.k!=='belt')continue;const[x,y]=xy(k),ls=BI[k];
   for(let l=0;l<L&&l<ls.length;l++){const a=ls[l];
-   for(let i=0;i<a.length;i++){const it=a[i],lim=i===0?1:a[i-1].p-SP,op=it.p;if(lim>it.p)it.p=Math.min(it.p+mv,lim);it.st=it.p===op;
-    if(i>0&&it.st&&a[i-1].st&&canMerge(a[i-1],it)){const f=a[i-1],nf=f.n||1,nb=it.n||1;f.q=(f.q*nf+it.q*nb)/(nf+nb);f.n=nf+nb;a.splice(i,1);i--}}
-   if(a.length&&a[0].p>=1){const it=a[0],tg=tileAt(x+DX[t.d],y+DY[t.d]),[ix,iy]=posAt(GEO[k],l,1);if(push(x,y,t.d,it,l)){a.shift();if(tg&&tg.k!=='belt')VFX.push({o:0,x0:ix,y0:iy,x1:x+DX[t.d]+.5,y1:y+DY[t.d]+.5,it,t:0})}}}}
- for(const k in S.tiles){const t=S.tiles[k];if(t.k!=='belt'){SRCB=k;updB(t,k,dt)}}SRCB=null;
+   const df=1/(1+.12*Math.max(0,a.length-2));let nxt=null;
+   if(a.length){const nk2=K(x+DX[t.d],y+DY[t.d]),nb=BI[nk2],nt2=S.tiles[nk2];if(nt2&&nt2.k==='belt'&&nb&&nb[l]&&nb[l].length)nxt=nb[l][nb[l].length-1].p}
+   for(let i=0;i<a.length;i++){const it=a[i],gap=i===0?(nxt===null?9:1-it.p+nxt):a[i-1].p-it.p,lim=i===0?1:a[i-1].p-SP,op=it.p,f=.2+.8*Math.max(0,Math.min(1,(gap-SP)/.45));
+    if(lim>it.p)it.p=Math.min(it.p+mv*f*df,lim);it.st=it.p===op}
+   if(a.length&&a[0].p>=1){const it=a[0],tg=tileAt(x+DX[t.d],y+DY[t.d]),[ix,iy]=posAt(GEO[k],l,1);if(push(x,y,t.d,it,l,true)){a.shift();if(tg&&tg.k!=='belt')VFX.push({o:0,x0:ix,y0:iy,x1:x+DX[t.d]+.5,y1:y+DY[t.d]+.5,it,t:0})}}}}
+ if(!S.brk)for(const k in S.tiles){const t=S.tiles[k];if(t.k!=='belt'){SRCB=k;updB(t,k,dt)}}SRCB=null;
  for(let i=VFX.length-1;i>=0;i--){const v=VFX[i];v.t+=dt/.22;if(v.t>=1){if(v.o)v.it.vh=0;VFX.splice(i,1)}}
- S.ob-=dt*wxBact();if(S.ob<=0)outbreak();
+ if(!S.brk){S.ob-=dt*wxBact();if(S.ob<=0)outbreak()}
  pwAcc+=dt;if(pwAcc>=.25){pwAcc=0;calcPower()}
  const evOn=S.ev&&Date.now()<S.ev.until;for(let i=0;i<S.disc;i++){const tg=evOn&&S.ev.t===i?1.8:1;S.dem[i]+=(tg-S.dem[i])*Math.min(1,.015*mktRec*dt)}
  S.evT=(S.evT||200)-dt;if(S.evT<=0){S.evT=150+Math.random()*150;const i=Math.floor(Math.random()*S.disc);S.ev={t:i,until:Date.now()+60000};toast('📈 '+V[i].n+' craze! Demand is way up for 60s')}
@@ -417,13 +461,14 @@ function landBoxOld(){let x0=99,y0=99,x1=-1,y1=-1;[...LAND,...LANDP].forEach(k=>
 function clampCam(){const b=landBox(),x0=b.x0*T,x1=b.x1*T,y0=b.y0*T,y1=b.y1*T;
  cam.x=x1-x0<=W?(x0+x1)/2-W/2:Math.max(x0,Math.min(x1-W,cam.x));cam.y=y1-y0<=H?(y0+y1)/2-H/2:Math.max(y0,Math.min(y1-H,cam.y))}
 function setZoom(z,sx,sy){const wx=(sx+cam.x)/T,wy=(sy+cam.y)/T;zoom=Math.max(.45,Math.min(2.2,z));T=BASE*zoom;cam.x=wx*T-sx;cam.y=wy*T-sy;clampCam()}
-function home(){let bx=27,by=0;for(const k in S.tiles)if(S.tiles[k].k==='bank'){[bx,by]=xy(k);break}cam.x=(bx+.5)*T-W/2;cam.y=Math.max(0,by*T-T*.5);clampCam()}
+function home(){let bx=27,by=0;for(const k in S.tiles)if(S.tiles[k].k==='bank'||S.tiles[k].k==='dock'){[bx,by]=xy(k);break}cam.x=(bx+.5)*T-W/2;cam.y=Math.max(0,by*T-T*.5);clampCam()}
 function rr(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath()}
 const EMO='"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 function emo(e,x,y,s){ctx.font=s+'px '+EMO;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(e,x,y)}
 function txt(s,x,y,size,col){ctx.font='900 '+size+'px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=Math.max(2,size*.22);ctx.strokeStyle='#000b';ctx.strokeText(s,x,y);ctx.fillStyle=col||'#fff';ctx.fillText(s,x,y)}
 function poly(p){ctx.beginPath();ctx.moveTo(p[0][0]*T,p[0][1]*T);if(p.length===3)ctx.quadraticCurveTo(p[1][0]*T,p[1][1]*T,p[2][0]*T,p[2][1]*T);else for(let i=1;i<p.length;i++)ctx.lineTo(p[i][0]*T,p[i][1]*T);ctx.stroke()}
 function drawPep(x,y,s,it){const v=V[it.t],r=s/2;
+ if(it.g!==undefined){const I=ING[it.g];ctx.fillStyle=I.c;rr(x-r*.8,y-r*.8,r*1.6,r*1.6,r*.38);ctx.fill();ctx.lineWidth=Math.max(1,s*.06);ctx.strokeStyle='#000a';ctx.stroke();if(s>=11)emo(I.e,x,y+s*.03,s*.6);return}
  if(it.m){ctx.fillStyle='#6b4423';ctx.beginPath();ctx.ellipse(x,y+r*.2,r*.55,r*.3,0,0,7);ctx.fill();if(s>=9){ctx.fillStyle='#7d5230';ctx.beginPath();ctx.ellipse(x,y-r*.1,r*.38,r*.24,0,0,7);ctx.fill();ctx.fillStyle='#8f6038';ctx.beginPath();ctx.ellipse(x,y-r*.35,r*.2,r*.16,0,0,7);ctx.fill()}return}
  if(s<9){ctx.fillStyle=it.s?'#e3cf9c':v.c;ctx.beginPath();ctx.arc(x,y,r*.6,0,7);ctx.fill();if(it.inf){ctx.fillStyle='#b04dff';ctx.beginPath();ctx.arc(x,y,r*.3,0,7);ctx.fill()}return}
  if(it.r){ctx.fillStyle='rgba(255,215,60,.55)';ctx.beginPath();ctx.arc(x,y,r*(it.s?.7:1.02),0,7);ctx.fill()}
@@ -457,6 +502,7 @@ function drawB(k,t,now){const[x,y]=xy(k),b=BT[t.k],s=T*.92,px=x*T+T*.04,py=y*T+T
    if(i>=6)break;ctx.fillStyle=t.hy?'#e8f6ff':'#3e2914';ctx.beginPath();ctx.arc(ix,iy,rad,0,7);ctx.fill();
    if(p){const g=Math.min(1,p.g);ctx.fillStyle=g>=1?V[p.t].c:'#6fc24a';ctx.beginPath();ctx.arc(ix,iy,rad*(.35+.65*g),0,7);ctx.fill()}}
   if(PROT.has(k)){ctx.fillStyle='#c79bff';ctx.beginPath();ctx.arc(px+s*.88,py+s*.12,s*.08,0,7);ctx.fill()}
+  if(t.sb&&t.sb.length&&t.pl.length<fPlots(t))txt(ING[needIng(t.sb[0].t)].e+'?',px+s*.2,py+s*.16,Math.max(8,T*.16),'#ffb0a8');
   if(t.fz>0){ctx.fillStyle='rgba(120,255,90,'+(.12+.06*Math.sin(now/300))+')';rr(px,py,s,s,s*.16);ctx.fill();emo('💩',px+s*.13,py+s*.13,s*.2)}
   txt(t.inf>0?'🦠 '+Math.ceil(t.inf)+'s':t.pl.length+'/'+n,cx,py+s*.84,Math.max(7,T*.17),t.inf>0?'#d9a8ff':'#e6ffd0');
   if(t.inf>0){ctx.fillStyle='rgba(150,60,220,'+(.2+.1*Math.sin(now/200))+')';rr(px,py,s,s,s*.16);ctx.fill()}}
@@ -478,6 +524,10 @@ function drawB(k,t,now){const[x,y]=xy(k),b=BT[t.k],s=T*.92,px=x*T+T*.04,py=y*T+T
   ctx.strokeStyle='#ffb020';ctx.lineWidth=s*.1;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(mx,my);ctx.lineTo(ex,ey);ctx.stroke();ctx.lineCap='butt';
   ctx.fillStyle='#ddd';ctx.beginPath();ctx.arc(cx,cy,s*.08,0,7);ctx.fill();ctx.beginPath();ctx.arc(mx,my,s*.05,0,7);ctx.fill();
   if(t.h)drawPep(ex,ey,s*.34,t.h)}
+ else if(RCP[t.k]){const r=RCP[t.k],I=ING[r.out];ctx.fillStyle='#0005';rr(px+s*.12,py+s*.1,s*.76,s*.58,s*.1);ctx.fill();emo(I.e,cx,py+s*.38,s*.34);
+  if(t.cr){ctx.strokeStyle=I.c;ctx.lineWidth=s*.06;ctx.beginPath();ctx.arc(cx,py+s*.38,s*.26,-Math.PI/2,-Math.PI/2+(t.cp||0)*Math.PI*2);ctx.stroke()}
+  txt(Object.keys(r.in).map(g=>ING[g].e+((t.inv&&t.inv[g])||0)).join(''),cx,py+s*.85,Math.max(7,T*.13));if(t.out&&t.out.length>=4)txt('FULL',cx,py+s*.12,Math.max(7,T*.12),'#ff8a7a')}
+ else if(t.k==='dock'){ctx.fillStyle='#1d4a60';rr(px+s*.08,py+s*.26,s*.84,s*.46,s*.08);ctx.fill();emo('🚚',cx+Math.sin(now/600)*s*.06,py+s*.46,s*.38);txt('🟫'+fmt2(.6*lvM(t)*lanes())+'/s',cx,py+s*.88,Math.max(7,T*.13))}
  else if(t.k==='bank'&&t.tap){const pr=Math.min(1,(t.w||0)/seedWork()),rad=s*.3*(1-.12*(t.tp||0));
   ctx.fillStyle='#5a3618';ctx.beginPath();ctx.arc(cx,cy-s*.05,s*.36,0,7);ctx.fill();
   ctx.strokeStyle='#ffd84a';ctx.lineWidth=s*.07;ctx.beginPath();ctx.arc(cx,cy-s*.05,s*.36,-Math.PI/2,-Math.PI/2+pr*2*Math.PI);ctx.stroke();
@@ -530,16 +580,19 @@ function draw(now){ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#120d0a';ctx
  ctx.strokeStyle='rgba(255,255,255,.07)';ctx.lineWidth=Math.max(1,T*.02);for(const[,g]of gs){poly(g.l[0]);}
  for(const k in UGL){const[a,b]=xy(k),[c,e]=xy(UGL[k]);ctx.strokeStyle='rgba(255,216,74,.35)';ctx.lineWidth=Math.max(2,T*.06);ctx.setLineDash([T*.15,T*.15]);ctx.beginPath();ctx.moveTo((a+.5)*T,(b+.5)*T);ctx.lineTo((c+.5)*T,(e+.5)*T);ctx.stroke();ctx.setLineDash([])}
  for(const[k,g]of gs){const t=S.tiles[k],c=g.c[2];arrow(c[0]*T-DX[t.d]*T*.5,c[1]*T-DY[t.d]*T*.5,t.d,'#ffffff30',T*.9)}
- const s=Math.min(.5,(.76/L)*.95)*T;
+ const s=Math.min(.32,(.76/L)*.92)*T;
  for(const[k,g]of gs){const ls=BI[k];if(!ls)continue;for(let l=0;l<L&&l<ls.length;l++)for(const it of ls[l]){if(it.vh)continue;const[x,y]=posAt(g,l,it.p);drawPep(x*T,y*T,s,it);if((it.n||1)>1&&s>=12)txt('x'+it.n,x*T+s*.38,y*T+s*.36,Math.max(8,s*.36),'#fff')}}
  for(const v of VFX){let px,py,sc=1;const e=v.t*v.t*(3-2*v.t);
   if(v.o){const ls=BI[v.k],a=ls&&ls[v.l];if(!a||!a.includes(v.it)||!GEO[v.k])continue;const[ex,ey]=posAt(GEO[v.k],v.l,v.it.p);px=v.x0+(ex-v.x0)*e;py=v.y0+(ey-v.y0)*e;sc=.5+.5*e}
   else{px=v.x0+(v.x1-v.x0)*e;py=v.y0+(v.y1-v.y0)*e;sc=1-.6*e}
+  if(v.lz){ctx.strokeStyle='rgba(255,50,40,'+(1-v.t)*.9+')';ctx.lineWidth=Math.max(2,T*.06);ctx.beginPath();ctx.moveTo(v.x1*T,v.y1*T);ctx.lineTo(px*T,py*T);ctx.stroke();ctx.strokeStyle='rgba(255,220,210,'+(1-v.t)+')';ctx.lineWidth=1;ctx.stroke()}
   drawPep(px*T,py*T,s*sc,v.it)}
  for(const k in S.tiles){const t=S.tiles[k];if(t.k!=='belt')drawB(k,t,now)}
  for(const k in S.tiles){const t=S.tiles[k];if(t.k==='farm'&&t.inf>0){const[x,y]=xy(k);beacon((x+.04)*T+T*.92*.82,(y+.04)*T+T*.92*.16,T*.92,now)}}
  for(const f of floats){ctx.globalAlpha=Math.max(0,Math.min(1,f.t*1.5));txt(f.txt,f.x*T,f.y*T,Math.max(10,T*.25),f.col);ctx.globalAlpha=1}
+ if(S.brk&&S.tiles[S.brk.k]&&Math.sin(now/150)>0){const[bx,by]=xy(S.brk.k);ctx.strokeStyle='#ff3b2e';ctx.lineWidth=4;ctx.strokeRect(bx*T+2,by*T+2,T-4,T-4)}
  ctx.setTransform(DPR,0,0,DPR,0,0);
+ if(S.brk){ctx.fillStyle='rgba(120,0,0,.18)';ctx.fillRect(0,0,W,H)}
  if(flashT>0){ctx.fillStyle='rgba(176,77,255,'+flashT*.3+')';ctx.fillRect(0,0,W,H)}
  if(wxOn())wxFx(now)}
 function wxFx(now){const ty=WX.type;
@@ -553,7 +606,7 @@ function wxFx(now){const ty=WX.type;
 
 /* ---------------- input ---------------- */
 let tool='hand',pickK=null,selK=null,drag=null,cat=null;
-const CATS=[{id:'plant',name:'Planters',icon:'🌱',items:['bank','farm']},{id:'ranch',name:'Ranch',icon:'🐄',items:['barn']},{id:'proc',name:'Processing',icon:'🐝',items:['cross','sort']},{id:'logi',name:'Logistics',icon:'🛤️',items:['arm','split','store','compost']},{id:'sale',name:'Sales',icon:'🏪',items:['market','taste','farmers']},{id:'def',name:'Defense',icon:'🛡️',items:['spray']},{id:'power',name:'Power',icon:'⚡',items:['solar','wind','bio']}];
+const CATS=[{id:'plant',name:'Planters',icon:'🌱',items:['bank','farm']},{id:'fac',name:'Factory',icon:'🏭',items:['dock','mixer','brewer','encap','lab','reactor']},{id:'ranch',name:'Ranch',icon:'🐄',items:['barn']},{id:'proc',name:'Processing',icon:'🐝',items:['cross','sort']},{id:'logi',name:'Logistics',icon:'🛤️',items:['arm','split','store','compost']},{id:'sale',name:'Sales',icon:'🏪',items:['market','taste','farmers']},{id:'def',name:'Defense',icon:'🛡️',items:['spray']},{id:'power',name:'Power',icon:'⚡',items:['solar','wind','bio']}];
 const HINTS={hand:'Tap the TAP bank for seeds. Tap or hold a building to open it. Drag to move, pinch to zoom.',
  belt:'Drag to lay belts (they point the way you drag). Use two fingers to move the map.',
  build:'Pick a category, then a building, then tap a tile. Hold a building button for info and stats.',
@@ -620,7 +673,8 @@ function place(x,y){const k=K(x,y),t=S.tiles[k];
  if(isDist(x,y)&&!['market','taste','farmers','store','arm','split','sort','compost'].includes(pickK)){toast('🏙️ The Market District is for markets, customers and farmers markets (plus storage and logistics)');return}
  if(pickK==='farmers'&&!isDist(x,y)){toast('🧺 Farmers Markets can only go in the 🏙️ Market District at the bottom of the map');return}
  const c=bCost(pickK);if(S.coins<c){toast('Need 🪙'+fmt(c)+' for '+BT[pickK].name);return}
- S.coins-=c;const o={k:pickK,d:t?t.d:(S.lastD??1)};if(pickK==='farm'){o.pl=[];o.inf=0}if(pickK==='barn')o.herd=[ADULT];if(isDist(x,y))o.dist=true;if(pickK==='bank')o.v=0;
+ S.coins-=c;const o={k:pickK,d:t?t.d:(S.lastD??1)};if(pickK==='farm'){o.pl=[];o.inf=0}if(pickK==='barn')o.herd=[ADULT];if(isDist(x,y))o.dist=true;if(pickK==='bank'){o.v=0;if(!Object.values(S.tiles).some(q=>q.k==='bank'&&q.tap))o.tap=true}
+ if(BT[pickK].out&&!t){const cur=tileAt(x+DX[o.d],y+DY[o.d]);if(!cur||cur.k!=='belt'){for(let d=0;d<4;d++){const nb=tileAt(x+DX[d],y+DY[d]);if(nb&&nb.k==='belt'&&nb.d!==(d+2)%4){o.d=d;break}}}}
  S.tiles[k]=o;rebuild();save();toast(BT[pickK].icon+' '+BT[pickK].name+' built')}
 
 /* ---------------- UI ---------------- */
@@ -664,29 +718,16 @@ function render(){const sh=$('#sheet');let h='';
   <button class="buy wide ${ok?'':'no'}" data-a="pres">${ok?'PRESTIGE NOW':'Keep growing…'}</button>
   <h3>🌟 Permanent upgrades (kept forever) — you have 🌟${fmt(S.gp)}</h3>`+PERM.map(u=>{const l=pm(u.id),mx=u.max&&l>=u.max;return`<div class="row"><div class="ri">${u.icon}</div><div class="rt"><b>${u.name}</b> <small>Lv ${l}</small><div class="rd">${u.desc(l)}${mx?'':' → '+u.desc(l+1)}</div></div>${buyG('perm:'+u.id,u.cost(l),mx)}</div>`}).join('')}
  else if(sheetKind==='help'){h=X+`<h2>🌶️ How to play</h2>
-  <p><b>Tap the 🌰 TAP bank</b> to send seeds. The faster you tap, the faster they come. Extra seed banks run automatically (they need ⚡ power). Seed Genetics makes better peppers but each seed takes more work, so level your banks up too.</p>
-  <p><b>Every building can be leveled up forever</b> from its menu; each level costs more.</p>
-  <p>⚡ <b>Power:</b> buy a Power Block from a land sign and build solar, wind or biogas. Without enough power, machines crawl.</p>
-  <p>🏪 <b>Market demand:</b> selling lots of one pepper lowers its price; watch for crazes.</p>
-  <p><b>The chain:</b> 🌰 Seed Bank → belt → 🌱 Farm (seeds grow into peppers) → belt → 🏪 Market for coins.</p>
-  <p><b>Branch it</b> with a 🔀 Splitter so peppers also reach:</p>
-  <p>😋 <b>Customers</b>: they taste each pepper. The better they like it, the more seeds of that variety you get back (plus tips).<br>🐝 <b>Pollination Warehouse</b>: an indoor farm where bees cross pairs of peppers into seeds. Pairs of your newest variety unlock the next hotter one, from Bell through Habanero, Ghost and Reaper, up to Experimental.<br>📦 <b>Storage</b>: saves up product. Set it to Hold, then Release it where you want it.</p>
-  <p>💧 Tap a farm to convert it to <b>Hydroponic</b> for much faster growth.</p>
-  <p><b>Bacteria</b> randomly hit farms (a red light spins on infected ones): crops are destroyed and the farm puts out infected 🦠 peppers for a while. Defend with 🛡️ Plant Immunity (natural, no downside) or a 🧴 Pesticide Sprayer (total protection but lower quality).</p>
-  <p>🔍 <b>Quality Sorters</b> pass good peppers out the front and kick low-star or infected ones out the sides (send those to ♻️ Compost).</p>
-  <p>⛏️ <b>Mines:</b> dig under the farm for ore, gems (rare seeds) and fossil seeds (research), fight creatures and complete missions.</p>
-  <p>🛸 <b>Bonus drones</b> fly over now and then. Tap one for a reward.</p>
-  <p>✨ <b>Rare seeds</b> come every 5 Seed Bank levels. They grow perfect peppers worth ×5.</p>
-  <p>🧺 <b>Stacks:</b> each plant yields a stack of peppers (starts at 2). Seed Genetics adds 1 per level.</p>
-  <p>😋 <b>Customers</b> sit next to a market, buy peppers and leave reviews.</p>
-  <p>🏙️ <b>Market District:</b> the bottom 64×32 of the map. Buy lots there for markets (+25%) and Farmers Markets.</p>
-  <p>🕳️ Drag a belt across another belt or a building and it tunnels underneath. In Belt mode, tap a belt to rotate it.</p>
-  <p>💩 <b>Fertilizer</b> upgrades are paid with manure from your pastures.</p>
-  <p>🐄 <b>Cow Barn</b> makes manure. Belt it into farms for 2× growth. Feed cows your rejects for more.<br>🦾 <b>Robotic Arms</b> move items from the tile behind them to the tile in front: belt to storage, belt to market, storage to farm.</p>
-  <p>🪧 <b>Land:</b> tap a Buy land sign to expand left, right or down, up to 64×64.</p>
-  <p><b>Controls:</b> drag with one finger to move the map, pinch or use ＋/－ to zoom. 🛤️ drag to lay belts (they point the way you drag). 🏗️ tap a tile or belt to build. Tap a tool again to go back to Select. 🔄 rotate. Yellow arrows show where things come out.</p>
-  <p>🌦️ <b>Weather</b> follows your ZIP code's climate and changes every few minutes. Rain speeds growth but spreads bacteria; frost and storms slow it down. Hydroponic farms and warehouses are indoors and aren't affected. Tap the weather chip for details.</p>
-  <p>⭐ <b>Prestige</b> widens every belt: 2 → 6 lanes.</p>
+  <p><b>Start:</b> the 🚚 Supply Dock sends 🟫 Soil Pellets down the belt to the 🏪 Market. Each sells for a little. Build up from there.</p>
+  <p><b>Lasers in, arms out:</b> belts don't feed into buildings. A building's 🔴 laser grabs what it needs off any belt touching it, and its 🦾 arm drops its product on the belt its yellow arrow points to. Only the Market, Compost, Sorters, Splitters and tunnels take items off the end of a belt.</p>
+  <p><b>🏭 Factory chain:</b> 🟫 Pellets → 💧 Feed (Feed Mixer) → 🧪 Tonic (Tonic Brewer) → 💊 Vita-Pod (Pod Press) → ⚗️ Gene Serum (Gene Lab) → 🔮 Mutagen Core (Reactor). Each step sells for more.</p>
+  <p><b>🌱 Growing peppers:</b> a Farm needs a 🌰 seed (from a Seed Bank; your first one is a TAP bank) plus an ingredient. Bell & Banana need 🟫, Poblano & Jalapeño 💧, Serrano & Cayenne 🧪, Thai & Habanero 💊, Ghost to Pepper X ⚗️, Experimental 🔮. Peppers are worth far more than ingredients.</p>
+  <p><b>Traffic:</b> items bunched up on a belt slow down. If a jam backs up to a source for about 12 seconds, the 🔌 <b>breaker trips</b>: everything stops and earns nothing until you fix the jam and reset.</p>
+  <p>🐝 <b>Pollination Warehouse</b> crosses pairs of peppers into seeds and unlocks hotter varieties. 😋 <b>Customers</b> next to a market buy peppers, review them and give seeds back.</p>
+  <p>🐄 Barns make 💩 manure; farms laser it for 2× growth. ⚡ Bigger machines need power from a Power Block. 🦾 Robotic Arms move items between any two tiles.</p>
+  <p>🦠 Bacteria hit farms (red light); defend with Plant Immunity or a 🧴 Sprayer. 🔍 Sorters split by quality. 🕳️ Belts tunnel under things they cross. Tap a belt in Belt mode to rotate it.</p>
+  <p>⛏️ Mines, 🛸 bonus drones, ✨ rare seeds, 🏙️ Market District, 🌦️ weather and ⭐ prestige (more belt lanes + 🌟 permanent upgrades) all still work as before.</p>
+  <p><b>Controls:</b> one finger moves the map, pinch or ＋/－ to zoom. Tap a building to open it, hold a build button for info. Tap a tool again to go back to Select.</p>
   <button class="buy wide" data-a="close">Start farming!</button>`}
  else if(sheetKind==='info'){const k=sheetArg,b=BT[k],c=bCost(k),n=countOf(k),catN=(CATS.find(x=>x.items.includes(k))||{}).name||'';
   h=`<h2>${b.icon} ${b.name}</h2><p>${b.desc}</p><div class="stat"><span>Category</span><b>${catN}</b></div><div class="stat"><span>Cost to build</span><b>🪙 ${fmt(c)}</b></div><div class="stat"><span>You own</span><b>${n}</b></div>
@@ -698,6 +739,12 @@ function render(){const sh=$('#sheet');let h='';
   `<h3>🧰 Gear</h3>`+MUP.map(u=>{const l=mu(u.id);return`<div class="row"><div class="ri">${u.icon}</div><div class="rt"><b>${u.name}</b> <small>Lv ${l}</small><div class="rd">${u.desc(l)} → ${u.desc(l+1)}</div></div>${buy('mup:'+u.id,muCost(l),false)}</div>`}).join('')+
   `<h3>💰 Loot values now</h3>`+[3,4,5,6,7].map(i=>`<div class="stat"><span>${MTI[i].n}${i===6?' (+✨ rare seed)':i===7?' (+🐝 research)':''}</span><b>🪙 ${fmt(MTI[i].v*lootMult())}</b></div>`).join('')+
   `<p style="color:var(--mut)">Controls: drag anywhere in the bottom-left to move with a floating joystick (push up to jump; you hop 1-block steps on your own). Hold on a block to mine it. Tap a creature to hit it. Deeper means better ore and tougher enemies, and a better 🔦 lamp helps you see.</p>`}
+ else if(sheetKind==='upd'){h=`<h2>🏭 Big factory update!</h2>
+  <p><b>Belts no longer feed into buildings.</b> Buildings now use a 🔴 <b>laser</b> to grab what they need from any belt touching them, and a 🦾 <b>arm</b> drops what they make onto the belt their arrow points to. Only the Market, Compost, Sorters, Splitters and tunnels still take items straight off the end of a belt.</p>
+  <p><b>Peppers now need ingredients.</b> A 🚚 Supply Dock brings 🟫 Soil Pellets. Turn them into 💧 Feed → 🧪 Tonic → 💊 Pods → ⚗️ Serum → 🔮 Cores (Build → 🏭 Factory). Each step sells for more, and hotter peppers need better ingredients to grow.</p>
+  <p><b>Watch for jams.</b> Belts slow down when items bunch up. If a jam backs up to a source, the 🔌 breaker trips and everything stops until you reset it.</p>
+  <p>Your farm was reset to the new starting line (Supply Dock → Market). You kept your coins, land, upgrades, discovered peppers, seeds, rare seeds, Golden Peppers and mine gear.</p>
+  <button class="buy wide" data-a="close">Let's build!</button>`}
  else if(sheetKind==='land'&&xy(sheetArg)[1]>=DROW){const c=distCost();h=`<h2>🏙️ Buy a Market District lot</h2><p>An 8×8 lot in the Market District at the bottom of the map. Markets here get a <b>+25% prime-location bonus</b>, and this is the only place for 🧺 Farmers Markets.</p>
   <div class="stat"><span>District lots owned</span><b>${S.dland.length}</b></div><button class="buy wide" data-a="buyland:dist" data-c="${c}">🏙️ Buy lot — 🪙 ${fmt(c)}</button>
   <p style="color:var(--mut)">Run belts down to it. Belts off your own land cost 🪙${BELT_FEE} per tile, and they go underground automatically when they cross something.</p>`}
@@ -752,6 +799,13 @@ function render(){const sh=$('#sheet');let h='';
    <div class="row"><div class="ri">🐄</div><div class="rt"><b>Buy an adult cow</b><div class="rd">${hd.length>=cap?'Barn is full, upgrade it for room':'Starts making manure right away'}</div></div>${hd.length>=cap?'<button class="buy max">FULL</button>':buy('cow',cc,false)}</div>`}
   if(t.k==='farm'&&t.fz>0)h+=`<div class="stat"><span>💩 Fertilized (2× growth)</span><b>${Math.ceil(t.fz)}s</b></div>`;
   if(t.k==='arm')h+=`<div class="stat"><span>Speed</span><b>${fmt2(1/armP(S.up.arm))} moves/s</b></div><p>Point the arrow where items should go. It picks up from the opposite side. Upgrade speed under ⬆️ Upgrade.</p>`;
+  if(RCP[t.k]){const r=RCP[t.k];h+=`<h3>Recipe</h3><div class="stat"><span>${Object.keys(r.in).map(g=>r.in[g]+' '+ING[g].e+' '+ING[g].n).join(' + ')}</span><b>→ ${ING[r.out].e} ${ING[r.out].n}</b></div>
+   <div class="stat"><span>Time</span><b>${fmt2(r.tm/lvM(t))}s</b></div><div class="stat"><span>Holding</span><b>${Object.keys(r.in).map(g=>ING[g].e+' '+((t.inv&&t.inv[g])||0)).join('  ')} • ready ${(t.out||[]).length}/4</b></div>
+   <div class="stat"><span>Sells for</span><b>🪙 ${fmt(ING[r.out].v*vmult())} each</b></div><p>Its laser grabs ingredients off any belt touching it. Its arm drops the product on the belt its arrow points to. If that belt is full, it waits.</p>`}
+  if(t.k==='dock')h+=`<div class="stat"><span>Delivers</span><b>🟫 ${fmt2(.6*lvM(t))}/s per lane</b></div><div class="stat"><span>Pellet price</span><b>🪙 ${fmt(ING[0].v*vmult())}</b></div>`;
+  if(t.k==='farm'){h+=`<h3>What each pepper needs</h3>`+[...Array(S.disc).keys()].map(i=>`<div class="stat"><span>${dot(i)}${V[i].n}</span><b>🌰 seed + ${ING[needIng(i)].e} ${ING[needIng(i)].n}</b></div>`).join('')+
+   `<div class="stat"><span>Seeds waiting</span><b>${(t.sb||[]).length}</b></div><div class="stat"><span>Ingredients held</span><b>${Object.entries(t.inv||{}).filter(e=>e[1]>0).map(([g,c])=>ING[g].e+' '+c).join('  ')||'none'}</b></div>
+   <p>The farm's laser grabs seeds and the right ingredient from belts touching it, plus 💩 manure for 2× growth. Its arm puts peppers on the belt its arrow points to.</p>`}
   if(t.k==='market'){const evOn=S.ev&&Date.now()<S.ev.until;h+=(evOn?`<p style="color:#9ef07a"><b>📈 ${V[S.ev.t].n} craze! ${Math.ceil((S.ev.until-Date.now())/1000)}s left</b></p>`:'')+
    `<h3>Pepper prices (3★, this market)</h3><div class="stat" style="color:var(--mut);font-size:11px"><span>Variety</span><span>Price • Demand • Sold</span></div>`+
    [...Array(S.disc).keys()].map(i=>{const d=S.dem[i]||1,c=d>1.05?'#9ef07a':d<.85?'#ff8a7a':'#ffc83d',ar=d>1.05?'▲':d<.95?'▼':'•';
@@ -764,7 +818,9 @@ function render(){const sh=$('#sheet');let h='';
  sh.innerHTML=(sheetKind==='zip'&&sheetArg?'':'<div class="shx"><button class="x" data-a="close">✕</button></div>')+h;refreshSheet()}
 const hydroCost=()=>Math.floor(1500*Math.pow(1.6,Object.values(S.tiles).filter(t=>t.k==='farm'&&t.hy).length));
 let resetArm=false;
-function infoStats(k){const st=(a,b)=>`<div class="stat"><span>${a}</span><b>${b}</b></div>`;
+function infoStats(k){if(RCP[k]){const r=RCP[k],st=(a,b)=>`<div class="stat"><span>${a}</span><b>${b}</b></div>`;return st('Recipe',Object.keys(r.in).map(g=>r.in[g]+ING[g].e).join(' + ')+' → '+ING[r.out].e)+st('Product sells for','🪙 '+fmt(ING[r.out].v*vmult()))+st('Time',r.tm+'s')+(BT[k].pw?st('Power','⚡ '+BT[k].pw):st('Power','none'))}
+ if(k==='dock')return`<div class="stat"><span>Delivers</span><b>🟫 0.6/s per lane, free</b></div>`;
+const st=(a,b)=>`<div class="stat"><span>${a}</span><b>${b}</b></div>`;
  switch(k){
   case'bank':return st('Seeds per lane','~'+fmt2(.5/seedWork())+'/s at level 0')+st('Power','⚡ 2')+st('Belt lanes',lanes())+st('Bell seeds','Free, unlimited');
   case'solar':return st('Output','⚡ 4 in sun')+st('Now',WXT[WX.type].i+' ×'+fmt2(SOLW[WX.type]));
@@ -826,8 +882,9 @@ function prestige(){S.gp+=gpGain();S.prest++;S.coins=150*Math.pow(5,pm('pcash'))
  S.dem=V.map(()=>1);
  BI={};rebuild();save();toast('⭐ Prestige '+S.prest+'! Belts now carry '+lanes()+' lanes')}
 $('#bUp').onclick=()=>openSheet('up');$('#bSeeds').onclick=()=>openSheet('seeds');$('#bPr').onclick=()=>openSheet('pr');document.querySelectorAll('#zb button').forEach(b=>b.addEventListener('click',()=>{const z=b.dataset.z;if(z==='home')home();else setZoom(zoom*(z==='in'?1.25:.8),W/2,H/2)}));
-$('#bHelp').onclick=()=>openSheet('help');$('#bMine').onclick=()=>openSheet('mine');$('#bSet').onclick=()=>openSheet('set');$('#wxb').onclick=()=>openSheet('wx');$('#pwb').onclick=()=>openSheet('pw');
-function hud(){$('#coinv').innerHTML='🪙 <b>'+fmt(S.coins)+'</b>';const L=lanes();
+$('#bHelp').onclick=()=>openSheet('help');$('#brkR').onclick=()=>resetBreaker(false);$('#brkC').onclick=()=>resetBreaker(true);
+$('#bMine').onclick=()=>openSheet('mine');$('#bSet').onclick=()=>openSheet('set');$('#wxb').onclick=()=>openSheet('wx');$('#pwb').onclick=()=>openSheet('pw');
+function hud(){$('#brk').style.display=S.brk?'block':'none';$('#coinv').innerHTML='🪙 <b>'+fmt(S.coins)+'</b>';const L=lanes();
  $('#rate').textContent=fmt(perSec()*60)+' /min • '+L+' lane'+(L>1?'s':'')+(S.prest?' • ⭐'+S.prest:'')+(S.gp?' • 🌟'+fmt(S.gp):'')+(boostOn()?' • ⚡2× '+Math.ceil((S.boostUntil-Date.now())/1000)+'s':'');
  $('#bPr').classList.toggle('glow',S.run>=presReq());
  if(S.disc<V.length){$('#resl').textContent='🐝 Next: '+(V[S.disc].x?'Experimental':'???');$('#resb').style.width=S.res/resNeed()*100+'%'}else $('#resl').textContent='🏆 All varieties found';
@@ -975,7 +1032,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)save()});wi
 fixSave();rebuild();resize();setTool('hand');
 if(S.t&&S.rate>0){const el=(Date.now()-S.t)/1000;if(el>30)away(el)}
 updWx(true);
-if(!S.zipAsked)openSheet('zip',1);else if(!S.seen){S.seen=true;openSheet('help')}
+if(!S.zipAsked)openSheet('zip',1);else if(!S.seen){S.seen=true;openSheet('help')}else if(S.upd6){delete S.upd6;openSheet('upd')}
 requestAnimationFrame(tick);
 </script>
 </body>

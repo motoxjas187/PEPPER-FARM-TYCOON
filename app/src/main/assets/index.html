@@ -16,7 +16,7 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);font-family
 #rate{font-size:11px;color:var(--mut);font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hb{background:var(--panel);border:2px solid var(--line);color:var(--txt);border-radius:12px;padding:5px 3px;font-size:9.5px;font-weight:800;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:42px;flex:0 0 auto}
 .hb span{font-size:18px;line-height:1}
-@media (max-width:400px){.hb{min-width:38px;font-size:0;padding:7px 4px;gap:0}.hb span{font-size:20px}#coinv{font-size:19px}}
+@media (max-width:400px){#hud{gap:4px}.hb{min-width:34px;font-size:0;padding:6px 3px;gap:0}.hb span{font-size:18px}#coinv{font-size:17px}}
 .hb.glow{border-color:var(--gold);box-shadow:0 0 12px #ffc83d99}
 #res{margin:0 10px 4px;font-size:11px;color:var(--mut);font-weight:700;display:flex;align-items:center;gap:6px}
 #res .bar{flex:1;margin:0}
@@ -40,6 +40,18 @@ canvas{position:absolute;top:0;touch-action:none}
 .tb{flex:1;background:var(--panel);border:2px solid var(--line);border-radius:12px;color:var(--txt);padding:6px 2px;font-size:10px;font-weight:800;display:flex;flex-direction:column;align-items:center;gap:2px}
 .tb span{font-size:20px;line-height:1}
 .tb.on{border-color:var(--gold);background:#43301c}
+.drone{position:absolute;z-index:4;background:none;border:none;padding:8px;transition:transform 10s linear;cursor:pointer}
+.drone .db{display:block;font-size:34px;line-height:1;animation:bob .7s ease-in-out infinite alternate;filter:drop-shadow(0 3px 4px #000a)}
+.drone i{display:block;font-style:normal;font-size:18px;text-align:center;margin-top:-6px}
+@keyframes bob{from{transform:translateY(-5px)}to{transform:translateY(5px)}}
+#mine{position:fixed;inset:0;display:none;z-index:15;background:#000;touch-action:none}
+#mcv{position:absolute;left:0;top:0}
+#mhud{position:absolute;left:0;right:0;top:0;display:flex;gap:6px;align-items:center;padding:8px;font-weight:900;font-size:13px;color:#fff;text-shadow:0 1px 2px #000;pointer-events:none}
+#mhud span{background:#000a;border-radius:9px;padding:5px 8px}
+#mhud button{pointer-events:auto;margin-left:auto;background:var(--gold);color:#2a1a00;border:none;border-radius:10px;padding:8px 10px;font-weight:900;font-size:13px}
+#mctl{position:absolute;left:0;right:0;bottom:0;display:flex;gap:10px;padding:12px 12px calc(14px + env(safe-area-inset-bottom));pointer-events:none}
+#mctl button{pointer-events:auto;width:68px;height:68px;border-radius:50%;border:2px solid #fff6;background:#0008;color:#fff;font-size:28px;font-weight:900;touch-action:none}
+#mhint{position:absolute;left:0;right:0;bottom:96px;text-align:center;color:#fffc;font-size:12px;font-weight:700;pointer-events:none;text-shadow:0 1px 2px #000}
 #toast{position:fixed;left:50%;top:96px;transform:translateX(-50%);background:#000d;border:2px solid var(--gold);padding:8px 14px;border-radius:12px;font-weight:800;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:20;max-width:90%;text-align:center}
 #ov{position:fixed;inset:0;background:#000a;display:none;align-items:flex-end;justify-content:center;z-index:10}
 #sheet{background:var(--panel);border-top:3px solid var(--gold);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:82%;overflow:auto;padding:14px 14px calc(18px + env(safe-area-inset-bottom));touch-action:pan-y}
@@ -77,6 +89,7 @@ canvas{position:absolute;top:0;touch-action:none}
     <button class="hb" id="bSeeds"><span>🌶️</span>Peppers</button>
     <button class="hb" id="bPr"><span>⭐</span>Prestige</button>
     <button class="hb" id="bHelp"><span>❓</span>Help</button>
+    <button class="hb" id="bMine"><span>⛏️</span>Mines</button>
     <button class="hb" id="bSet"><span>⚙️</span>Settings</button>
   </div>
   <div id="res"><span id="resl">Next: Banana Pepper</span><div class="bar"><i id="resb"></i></div><button id="wxb">⛅ --°</button><button id="pwb">⚡ 0</button></div>
@@ -91,6 +104,7 @@ canvas{position:absolute;top:0;touch-action:none}
     <button class="tb" data-t="erase"><span>🗑️</span>Remove</button>
   </div>
 </div>
+<div id="mine"><canvas id="mcv"></canvas><div id="mhud"><span id="mhp">❤️ 10/10</span><span id="mdp">⬇️ 0m</span><span id="mbag">🎒 0</span><button id="mexit">⬆️ Exit & sell</button></div><div id="mhint">Hold on a block to mine it. Tap enemies to hit them.</div><div id="mctl"><button id="mL">◀</button><button id="mR">▶</button><div style="flex:1"></div><button id="mJ">⤒</button></div></div>
 <div id="toast"></div>
 <div id="ov"><div id="sheet"></div></div>
 
@@ -175,11 +189,11 @@ function load(){try{const r=localStorage.getItem(SAVE_KEY);if(!r)return null;con
 let S=load()||fresh();
 function fixSave(){const banks=Object.values(S.tiles).filter(t=>t.k==='bank');if(banks.length&&!banks.some(t=>t.tap))banks[0].tap=true;
  for(const t of Object.values(S.tiles))if(t.k==='barn'&&!t.herd){t.herd=[];for(let i=0;i<(t.cows||1);i++)t.herd.push(ADULT)}
- if(!S.dem||S.dem.length<V.length)S.dem=V.map((_,i)=>(S.dem&&S.dem[i])||1);if(!S.vs)S.vs=V.map(()=>0);if(!S.pland)S.pland=[];if(!S.dland)S.dland=[];if(!S.perm)S.perm={};if(!S.rev)S.rev=[];S.gp=S.gp||0;S.manure=S.manure||0;S.v=4}
+ if(!S.dem||S.dem.length<V.length)S.dem=V.map((_,i)=>(S.dem&&S.dem[i])||1);if(!S.vs)S.vs=V.map(()=>0);if(!S.pland)S.pland=[];if(!S.dland)S.dland=[];if(!S.perm)S.perm={};if(!S.rev)S.rev=[];S.gp=S.gp||0;S.manure=S.manure||0;S.rare=S.rare||0;if(!S.mu)S.mu={};if(!S.mis||S.mis.length<3){S.mis=S.mis||[];while(S.mis.length<3)S.mis.push(newMission())}S.v=5}
 function save(){S.t=Date.now();S.rate=perSec();try{localStorage.setItem(SAVE_KEY,JSON.stringify(S))}catch(e){}}
 
 /* ---------------- derived ---------------- */
-const lanes=()=>Math.min(1+S.prest,5);
+const lanes=()=>Math.min(2+S.prest,6);
 const seedWork=()=>Math.pow(1.2,S.up.seedq||0);
 const LVX={bank:1.3,farm:1.12,barn:1.1,arm:1.15,cross:1.15,taste:1.15,store:1.5,market:1.08,sort:1.25,split:1.25,solar:1.2,wind:1.2,bio:1.2};
 const lvl=t=>t.lv||0,lvM=t=>Math.pow(LVX[t.k]||1,lvl(t)),lvCost=t=>Math.floor(BT[t.k].cost*1.5*Math.pow(1.7,lvl(t)));
@@ -194,7 +208,8 @@ function calcPower(){let s=0,d=0,mr=0;for(const k in S.tiles){const t=S.tiles[k]
  PW={sup:s,dem:d,f:d<=0?1:s>=d?1:Math.max(.1,s/d)};mktRec=Math.pow(1.15,mr);
  if(PW.f<1&&!lowPwWarned){lowPwWarned=true;toast('⚡ Not enough power! Machines are running slow. Buy a ⚡ Power Block and build generators.')}if(PW.f>=1)lowPwWarned=false}
 const pf=t=>pwUse(t)>0?PW.f:1;
-const speed=()=>(1+.2*S.up.speed)*Math.pow(1.1,pm('pbelt'));
+const boostOn=()=>Date.now()<(S.boostUntil||0);
+const speed=()=>(boostOn()?2:1)*(1+.2*S.up.speed)*Math.pow(1.1,pm('pbelt'));
 const growT=t=>V[t].g*Math.pow(.88,S.up.fert);
 const plots=()=>2+S.up.plots;
 const armP=l=>1.2*Math.pow(.85,l);
@@ -202,7 +217,7 @@ const sprayPen=l=>15*Math.pow(.8,l);
 const stars=q=>Math.max(1,Math.min(5,Math.ceil(q/20)));
 const vmult=()=>Math.pow(1.25,S.up.hype)*Math.pow(1.5,S.prest)*Math.pow(1.08,S.up.seedq||0)*Math.pow(1.25,pm('pval'));
 function mkMult(mk){if(!mk)return 1;let m=lvM(mk)*(mk.dist?1.25:1);if(mk.k==='farmers'){const mix=new Set(mk.mix||[]).size;m*=1.6*(1+.1*mix)}return m}
-const price=(it,mk)=>it.m?.5*vmult():it.s?V[it.t].val*.2*vmult():V[it.t].val*(.4+1.2*it.q/100)*vmult()*(it.inf?.1:1)*(S.dem[it.t]||1)*mkMult(mk)*(it.n||1);
+const price=(it,mk)=>it.m?.5*vmult():it.s?V[it.t].val*.2*vmult():V[it.t].val*(.4+1.2*it.q/100)*vmult()*(it.inf?.1:1)*(S.dem[it.t]||1)*mkMult(mk)*(it.n||1)*(it.r?5:1);
 function adjMarket(x,y){for(let d=0;d<4;d++){const k=K(x+DX[d],y+DY[d]),t=S.tiles[k];if(t&&(t.k==='market'||t.k==='farmers'))return t}return null}
 function sellStats(it){if(it.s||it.m)return;const n=it.n||1;S.dem[it.t]=Math.max(.4,S.dem[it.t]-Math.min(.02,.0015*n));S.vs[it.t]=(S.vs[it.t]||0)+n;S.st.sold+=n}
 const resNeed=()=>3+3*S.disc;
@@ -284,7 +299,7 @@ function push(x,y,d,it,lane){const nx=x+DX[d],ny=y+DY[d],nk=K(nx,ny),nt=S.tiles[
 function accept(t,k,it,d){
  switch(t.k){
   case'farm':if(it.m){if((t.fz||0)>=150)return false;t.fz=(t.fz||0)+30;return true}
-   if(!it.s||t.pl.length>=fPlots(t))return false;t.pl.push({t:it.t,g:0});return true;
+   if(!it.s||t.pl.length>=fPlots(t))return false;t.pl.push({t:it.t,g:0,r:it.r||0});return true;
   case'market':case'farmers':{const g=price(it,t);earn(g);sellStats(it);if(t.k==='farmers'&&!it.s&&!it.m){t.mix=t.mix||[];t.mix.push(it.t);if(t.mix.length>12)t.mix.shift()}fl(k,'+'+fmt(g),'#ffc83d');return true}
   case'ugin':{const ok=UGL[k];if(!ok)return false;const o=S.tiles[ok];o.q=o.q||[];if(o.q.length>=4)return false;const[a,b]=xy(k),[c,e]=xy(ok);it.eta=SIMT+(Math.abs(c-a)+Math.abs(e-b))/speed();o.q.push(it);return true}
   case'bio':if(!it.m||(t.fuel||0)>=120)return false;t.fuel=(t.fuel||0)+20;return true;
@@ -318,23 +333,23 @@ function react(t,k,it){let n,e;const[tx,ty]=xy(k),mk=adjMarket(tx,ty);if(mk){ear
 function crossPair(k,a,b){
  if(a.inf||b.inf){fl(k,'🦠 ruined','#c79bff');return}
  const top=Math.max(a.t,b.t);if(top>0)S.seeds[top]+=2;S.st.cross++;
- if(a.t===S.disc-1&&b.t===S.disc-1&&S.disc<V.length){S.res+=Math.min(1.2,(a.q+b.q)/140);
+ if(a.t===S.disc-1&&b.t===S.disc-1&&S.disc<V.length){S.res+=Math.min(1.2,(a.q+b.q)/140)*(a.r||b.r?2:1);
   if(S.res>=resNeed()){S.res=0;S.disc++;S.seeds[S.disc-1]+=5;toast('🎉 New variety: '+V[S.disc-1].n+'! +5 seeds');flashT=.6;save()}}
  fl(k,top>0?'+2🌰':'🐝','#ffe08a')}
 function updB(t,k,dt){const[x,y]=xy(k);
  if(t.k==='ugout'){if(t.q&&t.q.length&&t.q[0].eta<=SIMT&&push(x,y,t.d,t.q[0]))t.q.shift();return}
  switch(t.k){
   case'bank':{const L=lanes();
-   if(t.tap){t.tp=Math.max(0,(t.tp||0)-dt*5);for(let i=0;i<L&&(t.sq||0)>0;i++){const l=((t.rl||0)+i)%L;if(t.v>0&&S.seeds[t.v]<=0)break;
-     if(push(x,y,t.d,{s:1,t:t.v,q:0,inf:false},l)){t.sq--;if(t.v>0)S.seeds[t.v]--;t.rl=l+1}}break}
+   if(t.tap){t.tp=Math.max(0,(t.tp||0)-dt*5);for(let i=0;i<L&&(t.sq||0)>0;i++){const l=((t.rl||0)+i)%L,rr=t.rare&&S.rare>0;if(!rr&&t.v>0&&S.seeds[t.v]<=0)break;
+     if(push(x,y,t.d,{s:1,t:t.v,q:0,inf:false,r:rr?1:0},l)){t.sq--;if(rr)S.rare--;else if(t.v>0)S.seeds[t.v]--;t.rl=l+1}}break}
    const r=autoRate(t)*pf(t);t.a=t.a||[];
    for(let l=0;l<L;l++){t.a[l]=(t.a[l]||0)+r*dt;if(t.a[l]<1)continue;
-    if(t.v>0&&S.seeds[t.v]<=0){t.a[l]=1;continue}
-    if(push(x,y,t.d,{s:1,t:t.v,q:0,inf:false},l)){t.a[l]-=1;if(t.v>0)S.seeds[t.v]--}else t.a[l]=1}break}
+    const rr=t.rare&&S.rare>0;if(!rr&&t.v>0&&S.seeds[t.v]<=0){t.a[l]=1;continue}
+    if(push(x,y,t.d,{s:1,t:t.v,q:0,inf:false,r:rr?1:0},l)){t.a[l]-=1;if(rr)S.rare--;else if(t.v>0)S.seeds[t.v]--}else t.a[l]=1}break}
   case'farm':{if(t.inf>0)t.inf=Math.max(0,t.inf-dt);if(t.fz>0)t.fz=Math.max(0,t.fz-dt);
    for(let i=0;i<t.pl.length;i++){const p=t.pl[i];
-    if(p.g<1){p.g+=dt*(t.fz>0?2:1)*lvM(t)*Math.pow(1.15,pm('pgrow'))*(t.hy?pf(t):wxGrow(p.t))/(growT(p.t)*(t.hy?.4:1));continue}
-    if(!p.it)p.it={s:0,t:p.t,q:t.inf>0?5:harvestQ(k,t.hy),inf:t.inf>0,n:stackN()};
+    if(p.g<1){p.g+=dt*(boostOn()?2:1)*(t.fz>0?2:1)*lvM(t)*Math.pow(1.15,pm('pgrow'))*(t.hy?pf(t):wxGrow(p.t))/(growT(p.t)*(t.hy?.4:1));continue}
+    if(!p.it)p.it={s:0,t:p.t,q:t.inf>0?5:p.r?100:harvestQ(k,t.hy),inf:t.inf>0,n:stackN(),r:p.r||0};
     if(emit(t,x,y,p.it,[t.d])){t.pl.splice(i,1);i--}}break}
   case'taste':if(t.q&&t.q.length){t.tm=(t.tm||0)+dt*lvM(t);if(t.tm>=1.2){t.tm=0;react(t,k,t.q.shift())}}break;
   case'cross':{t.sl=t.sl||[];while(t.sl.length<1+S.up.bays&&t.q&&t.q.length>=2){const p=t.q.splice(0,2);t.sl.push({a:p[0],b:p[1],g:0})}
@@ -356,7 +371,7 @@ function take(sx,sy){const k=K(sx,sy),st=S.tiles[k];if(!st)return null;
  switch(st.k){
   case'belt':{const ls=BI[k];if(!ls)return null;let bl=-1,bp=-1;for(let l=0;l<ls.length;l++){const a=ls[l];if(a.length&&a[0].p>bp){bp=a[0].p;bl=l}}return bl<0?null:ls[bl].shift()}
   case'store':return st.c&&st.c.length?st.c.shift():null;
-  case'farm':for(let i=0;i<st.pl.length;i++){const p=st.pl[i];if(p.g>=1){st.pl.splice(i,1);return p.it||{s:0,t:p.t,q:st.inf>0?5:harvestQ(k,st.hy),inf:st.inf>0,n:stackN()}}}return null;
+  case'farm':for(let i=0;i<st.pl.length;i++){const p=st.pl[i];if(p.g>=1){st.pl.splice(i,1);return p.it||{s:0,t:p.t,q:st.inf>0?5:p.r?100:harvestQ(k,st.hy),inf:st.inf>0,n:stackN(),r:p.r||0}}}return null;
   case'barn':if(st.mq>0){st.mq--;return{m:1,t:0,q:0,inf:false}}return null;
   case'sort':case'split':if(st.buf){const b=st.buf;st.buf=null;return b}return null;
  }return null}
@@ -367,7 +382,7 @@ function outbreak(){S.ob=40+Math.random()*50;const farms=Object.keys(S.tiles).fi
  S.st.lost+=t.pl.length;t.pl=[];t.inf=25;flashT=.8;toast('🦠 Bacteria hit a farm! Crops destroyed — its peppers come out infected for 25s')}
 
 /* ---------------- step ---------------- */
-function step(dt){SIMT+=dt;const L=lanes(),mv=speed()*dt;
+function step(dt){SIMT+=dt;droneStep(dt);const L=lanes(),mv=speed()*dt;
  for(const k in BI){const t=S.tiles[k];if(!t||t.k!=='belt')continue;const[x,y]=xy(k),ls=BI[k];
   for(let l=0;l<L&&l<ls.length;l++){const a=ls[l];
    for(let i=0;i<a.length;i++){const it=a[i],lim=i===0?1:a[i-1].p-SP;if(lim>it.p)it.p=Math.min(it.p+mv,lim)}
@@ -403,7 +418,8 @@ function poly(p){ctx.beginPath();ctx.moveTo(p[0][0]*T,p[0][1]*T);if(p.length===3
 function drawPep(x,y,s,it){const v=V[it.t],r=s/2;
  if(it.m){ctx.fillStyle='#6b4423';ctx.beginPath();ctx.ellipse(x,y+r*.2,r*.55,r*.3,0,0,7);ctx.fill();if(s>=9){ctx.fillStyle='#7d5230';ctx.beginPath();ctx.ellipse(x,y-r*.1,r*.38,r*.24,0,0,7);ctx.fill();ctx.fillStyle='#8f6038';ctx.beginPath();ctx.ellipse(x,y-r*.35,r*.2,r*.16,0,0,7);ctx.fill()}return}
  if(s<9){ctx.fillStyle=it.s?'#e3cf9c':v.c;ctx.beginPath();ctx.arc(x,y,r*.6,0,7);ctx.fill();if(it.inf){ctx.fillStyle='#b04dff';ctx.beginPath();ctx.arc(x,y,r*.3,0,7);ctx.fill()}return}
- if(it.s){ctx.fillStyle='#ead9a8';ctx.strokeStyle='#8a6a3a';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(x,y,r*.5,r*.36,-.5,0,7);ctx.fill();ctx.stroke();
+ if(it.r){ctx.fillStyle='rgba(255,215,60,.55)';ctx.beginPath();ctx.arc(x,y,r*(it.s?.7:1.02),0,7);ctx.fill()}
+ if(it.s){ctx.fillStyle=it.r?'#ffd84a':'#ead9a8';ctx.strokeStyle='#8a6a3a';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(x,y,r*.5,r*.36,-.5,0,7);ctx.fill();ctx.stroke();
   ctx.fillStyle=v.c;ctx.beginPath();ctx.arc(x,y,r*.17,0,7);ctx.fill();return}
  if(v.x){ctx.fillStyle=v.c+'55';ctx.beginPath();ctx.arc(x,y,r*.98,0,7);ctx.fill()}
  ctx.fillStyle=v.c;ctx.strokeStyle='#0007';ctx.lineWidth=Math.max(1,s*.05);ctx.beginPath();
@@ -620,7 +636,7 @@ function render(){const sh=$('#sheet');let h='';
   V.forEach((v,t)=>{if(t<S.disc){h+=`<div class="row"><div class="ri">${dot(t)}</div><div class="rt"><b>${v.n}</b> ${v.x?'<small>EXPERIMENTAL</small>':''}<div class="rd">${v.shu} SHU • worth ~${fmt(V[t].val*vmult())} • grows ${fmt2(growT(t))}s • seeds: ${t===0?'∞':fmt(S.seeds[t])}</div></div>${t===0?'':buy('seed:'+t,seedPrice(t),false).replace('🪙','10🌰 🪙')}</div>`}
    else if(t===S.disc){h+=`<div class="row"><div class="ri">❓</div><div class="rt"><b>${v.x?'Experimental #'+(t-10):'???'}</b><div class="rd">Research ${fmt2(S.res)} / ${resNeed()} pairs of ${V[t-1].n}</div><div class="bar"><i style="width:${S.res/resNeed()*100}%"></i></div></div></div>`}});
   if(S.disc>=V.length)h+='<p>🏆 Every variety discovered!</p>'}
- else if(sheetKind==='pr'){const req=presReq(),ok=S.run>=req,L=lanes(),nl=Math.min(L+1,5);
+ else if(sheetKind==='pr'){const req=presReq(),ok=S.run>=req,L=lanes(),nl=Math.min(L+1,6);
   h=X+`<h2>⭐ Prestige</h2><p>Reset coins, upgrades and seed stock. You keep your farm layout and every variety you've discovered. In return:</p>
   <div class="stat"><span>Belt lanes</span><b>${L} → ${nl}${nl===L?' (max)':''}</b></div>
   <div class="stat"><span>Pepper value</span><b>×${fmt2(Math.pow(1.5,S.prest))} → ×${fmt2(Math.pow(1.5,S.prest+1))}</b></div>
@@ -640,6 +656,9 @@ function render(){const sh=$('#sheet');let h='';
   <p>💧 Tap a farm to convert it to <b>Hydroponic</b> for much faster growth.</p>
   <p><b>Bacteria</b> randomly hit farms (a red light spins on infected ones): crops are destroyed and the farm puts out infected 🦠 peppers for a while. Defend with 🛡️ Plant Immunity (natural, no downside) or a 🧴 Pesticide Sprayer (total protection but lower quality).</p>
   <p>🔍 <b>Quality Sorters</b> pass good peppers out the front and kick low-star or infected ones out the sides (send those to ♻️ Compost).</p>
+  <p>⛏️ <b>Mines:</b> dig under the farm for ore, gems (rare seeds) and fossil seeds (research), fight creatures and complete missions.</p>
+  <p>🛸 <b>Bonus drones</b> fly over now and then. Tap one for a reward.</p>
+  <p>✨ <b>Rare seeds</b> come every 5 Seed Bank levels. They grow perfect peppers worth ×5.</p>
   <p>🧺 <b>Stacks:</b> each plant yields a stack of peppers (starts at 2). Seed Genetics adds 1 per level.</p>
   <p>😋 <b>Customers</b> sit next to a market, buy peppers and leave reviews.</p>
   <p>🏙️ <b>Market District:</b> the bottom 64×32 of the map. Buy lots there for markets (+25%) and Farmers Markets.</p>
@@ -649,12 +668,18 @@ function render(){const sh=$('#sheet');let h='';
   <p>🪧 <b>Land:</b> tap a Buy land sign to expand left, right or down, up to 64×64.</p>
   <p><b>Controls:</b> drag with one finger to move the map, pinch or use ＋/－ to zoom. 🛤️ drag to lay belts (they point the way you drag). 🏗️ tap a tile or belt to build. Tap a tool again to go back to Select. 🔄 rotate. Yellow arrows show where things come out.</p>
   <p>🌦️ <b>Weather</b> follows your ZIP code's climate and changes every few minutes. Rain speeds growth but spreads bacteria; frost and storms slow it down. Hydroponic farms and warehouses are indoors and aren't affected. Tap the weather chip for details.</p>
-  <p>⭐ <b>Prestige</b> widens every belt: 1 → 5 lanes.</p>
+  <p>⭐ <b>Prestige</b> widens every belt: 2 → 6 lanes.</p>
   <button class="buy wide" data-a="close">Start farming!</button>`}
  else if(sheetKind==='info'){const k=sheetArg,b=BT[k],c=bCost(k),n=countOf(k),catN=(CATS.find(x=>x.items.includes(k))||{}).name||'';
   h=`<h2>${b.icon} ${b.name}</h2><p>${b.desc}</p><div class="stat"><span>Category</span><b>${catN}</b></div><div class="stat"><span>Cost to build</span><b>🪙 ${fmt(c)}</b></div><div class="stat"><span>You own</span><b>${n}</b></div>
   <div class="stat"><span>Outputs</span><b>${b.out?(k==='sort'?'Front = pass, sides = reject':k==='split'?'Front + both sides':'Where its yellow arrow points'):'None'}</b></div>${infoStats(k)}
   <button class="buy wide" data-a="pick:${k}" data-c="${c}">Build ${b.name}</button>`}
+ else if(sheetKind==='mine'){h=`<h2>⛏️ The Mines</h2><p>Dig down under the farm for ore, gems and fossil seeds, and fight cave creatures. Exit any time to sell what's in your bag. If you faint, the bag is lost.</p>
+  <button class="buy wide" data-a="menter" style="font-size:16px">⛏️ Enter the Mines</button>
+  <h3>📋 Missions</h3>`+S.mis.map((m,i)=>{const done=m.prog>=m.need;return`<div class="row"><div class="ri">${m.ty==='mine'?'⛏️':m.ty==='kill'?'🗡️':'⬇️'}</div><div class="rt"><b>${m.txt}</b><div class="rd">${Math.min(m.prog,m.need)} / ${m.need} • Reward: ${rwTxt(m.rw)}</div><div class="bar"><i style="width:${Math.min(100,m.prog/m.need*100)}%"></i></div></div>${done?`<button class="buy" data-a="mclaim:${i}">Claim</button>`:''}</div>`}).join('')+
+  `<h3>🧰 Gear</h3>`+MUP.map(u=>{const l=mu(u.id);return`<div class="row"><div class="ri">${u.icon}</div><div class="rt"><b>${u.name}</b> <small>Lv ${l}</small><div class="rd">${u.desc(l)} → ${u.desc(l+1)}</div></div>${buy('mup:'+u.id,muCost(l),false)}</div>`}).join('')+
+  `<h3>💰 Loot values now</h3>`+[3,4,5,6,7].map(i=>`<div class="stat"><span>${MTI[i].n}${i===6?' (+✨ rare seed)':i===7?' (+🐝 research)':''}</span><b>🪙 ${fmt(MTI[i].v*lootMult())}</b></div>`).join('')+
+  `<p style="color:var(--mut)">Controls: ◀ ▶ to walk, ⤒ to jump (you hop up 1-block steps on your own). Hold on a block to mine it. Tap a creature to hit it. Deeper means better ore and tougher enemies, and a better 🔦 lamp helps you see.</p>`}
  else if(sheetKind==='land'&&xy(sheetArg)[1]>=DROW){const c=distCost();h=`<h2>🏙️ Buy a Market District lot</h2><p>An 8×8 lot in the Market District at the bottom of the map. Markets here get a <b>+25% prime-location bonus</b>, and this is the only place for 🧺 Farmers Markets.</p>
   <div class="stat"><span>District lots owned</span><b>${S.dland.length}</b></div><button class="buy wide" data-a="buyland:dist" data-c="${c}">🏙️ Buy lot — 🪙 ${fmt(c)}</button>
   <p style="color:var(--mut)">Run belts down to it. Belts off your own land cost 🪙${BELT_FEE} per tile, and they go underground automatically when they cross something.</p>`}
@@ -689,6 +714,7 @@ function render(){const sh=$('#sheet');let h='';
   h=X+`<h2>${b.icon} ${b.name}</h2><p>${b.desc}</p>`;
   if(t.k==='bank'&&t.tap)h+=`<div class="stat"><span>Type</span><b>👆 Tap bank (tap it on the map)</b></div><div class="stat"><span>Work per seed</span><b>${fmt2(seedWork())}</b></div><div class="stat"><span>Tap power</span><b>${fmt2(lvM(t))}</b></div><div class="stat"><span>Taps per seed</span><b>~${fmt2(seedWork()/lvM(t))}</b></div><div class="stat"><span>Seeds waiting</span><b>${t.sq||0} / 30</b></div>`;
   if(t.k==='bank'&&!t.tap)h+=`<div class="stat"><span>Type</span><b>⚙️ Automatic</b></div><div class="stat"><span>Seeds per lane</span><b>${fmt2(autoRate(t)*pf(t))}/s</b></div>`;
+  if(t.k==='bank')h+=`<h3>✨ Rare seeds: ${fmt(S.rare||0)}</h3><p>Rare seeds grow perfect 100-quality peppers worth ×5 (and double research). You get them every 5 bank levels, from bonus drones and gems in the mines.</p><div class="seg"><button class="${t.rare?'':'on'}" data-a="brare:0">Normal seeds</button><button class="${t.rare?'on':''}" data-a="brare:1">✨ Plant rare first</button></div>`;
   if(t.k==='bank'){h+='<h3>Plant which variety?</h3><div class="seg">';for(let i=0;i<S.disc;i++)h+=`<button class="${t.v===i?'on':''}" data-a="bv:${i}">${dot(i)}${V[i].n.replace(' Pepper','')}<br>${i===0?'∞':fmt(S.seeds[i])}</button>`;
    h+='</div>';if(t.v>0)h+=`<div class="row"><div class="rt">Buy 10 ${V[t.v].n} seeds</div>${buy('seed:'+t.v,seedPrice(t.v),false)}</div>`;
    if(t.v>0&&S.seeds[t.v]<=0)h+='<p style="color:#ff8a7a">Out of seeds! Feed customers or cross-pollinate to earn more.</p>'}
@@ -742,7 +768,7 @@ function revHtml(){if(!S.rev.length)return'<h3>Customer reviews</h3><p>No review
  return`<h3>Customer reviews — ★ ${avg.toFixed(1)}</h3>`+S.rev.slice(0,6).map(r=>`<div class="stat"><span>${r.e} “${r.x}”</span><b style="font-size:11px">${'★'.repeat(r.s)}</b></div>`).join('')}
 const cowCost=n=>Math.floor(300*Math.pow(1.8,Math.max(0,n-1)));
 function lvDesc(t){const m=lvM(t),n=m*LVX[t.k],f=v=>'×'+fmt2(v);
- switch(t.k){case'bank':return(t.tap?'Tap power ':'Seed output ')+f(m)+' → '+f(n);case'farm':return'Growth '+f(m)+' → '+f(n)+', +1 plot every 3 levels';
+ switch(t.k){case'bank':return(t.tap?'Tap power ':'Seed output ')+f(m)+' → '+f(n)+'. ✨ Rare seeds at level '+(Math.floor(lvl(t)/5)+1)*5;case'farm':return'Growth '+f(m)+' → '+f(n)+', +1 plot every 3 levels';
   case'barn':return'Manure '+f(m)+' → '+f(n)+', space '+barnCap(t)+' → '+(barnCap(t)+2);case'store':return'Space '+Math.floor(STORE_CAP*m)+' → '+Math.floor(STORE_CAP*n);
   case'market':return'Prices '+f(m)+' → '+f(n)+', faster demand recovery';case'solar':case'wind':case'bio':return'Output '+f(m)+' → '+f(n);
   default:return'Speed '+f(m)+' → '+f(n)}}
@@ -769,7 +795,11 @@ function act(a,v){const t=sheetKind==='b'?S.tiles[sheetArg]:null;
  else if(a==='reset'){if(!resetArm){resetArm=true;render();setTimeout(()=>{resetArm=false},4000);return}try{localStorage.removeItem(SAVE_KEY)}catch(e){}S=fresh();S.seen=true;S.zipAsked=true;BI={};rebuild();home();updWx(true);closeSheet();toast('Game reset');save();return}
  else if(a==='pick'){if(tool!=='build')setTool('build');cat=(CATS.find(x=>x.items.includes(v))||{}).id||null;pickK=v;renderPicker();$('#hint').textContent='Tap a tile or belt to place '+BT[v].name+'.';closeSheet();return}
  else if(a==='buyland'){const c=v==='dist'?distCost():landCost(),[cx,cy]=xy(sheetArg);if(S.coins<c||!buyable(cx,cy))return;S.coins-=c;(v==='power'?S.pland:v==='dist'?S.dland:S.land).push(sheetArg);rebuild();clampCam();toast(v==='power'?'⚡ Power Block bought! Build generators on it.':'🪧 New farmland bought!');save();closeSheet();return}
- else if(a==='blv'){const c=lvCost(t);if(S.coins<c)return;S.coins-=c;t.lv=lvl(t)+1;toast(BT[t.k].icon+' Level '+t.lv)}
+ else if(a==='blv'){const c=lvCost(t);if(S.coins<c)return;S.coins-=c;t.lv=lvl(t)+1;if(t.k==='bank'&&t.lv%5===0){const n=1+Math.floor(t.lv/10);S.rare=(S.rare||0)+n;toast('✨ Bank level '+t.lv+': +'+n+' Rare Seed'+(n>1?'s':'')+'!');flashT=.4}else toast(BT[t.k].icon+' Level '+t.lv)}
+ else if(a==='brare')t.rare=v==='1';
+ else if(a==='menter'){enterMine();return}
+ else if(a==='mup'){const l=mu(v),c=muCost(l);if(S.coins<c)return;S.coins-=c;S.mu[v]=l+1;toast(MUP.find(u=>u.id===v).icon+' upgraded')}
+ else if(a==='mclaim'){const m=S.mis[+v];if(!m||m.prog<m.need)return;const rw=m.rw;if(rw.gp)S.gp++;else if(rw.rare)S.rare=(S.rare||0)+rw.rare;else earn(misCoins());toast('✅ Mission reward: '+rwTxt(rw));S.misN=(S.misN||0)+1;S.mis[+v]=newMission()}
  else if(a==='cow'){const hd=t.herd||(t.herd=[ADULT]),c=cowCost(hd.length);if(hd.length>=barnCap(t)||S.coins<c)return;S.coins-=c;hd.push(ADULT);toast('🐄 New cow!')}
  else if(a==='cure'){const c=cureCost();if(S.coins<c)return;S.coins-=c;t.inf=0;toast('🧪 Farm cured')}
  save();render()}
@@ -778,14 +808,139 @@ function prestige(){S.gp+=gpGain();S.prest++;S.coins=150*Math.pow(5,pm('pcash'))
  S.dem=V.map(()=>1);
  BI={};rebuild();save();toast('⭐ Prestige '+S.prest+'! Belts now carry '+lanes()+' lanes')}
 $('#bUp').onclick=()=>openSheet('up');$('#bSeeds').onclick=()=>openSheet('seeds');$('#bPr').onclick=()=>openSheet('pr');document.querySelectorAll('#zb button').forEach(b=>b.addEventListener('click',()=>{const z=b.dataset.z;if(z==='home')home();else setZoom(zoom*(z==='in'?1.25:.8),W/2,H/2)}));
-$('#bHelp').onclick=()=>openSheet('help');$('#bSet').onclick=()=>openSheet('set');$('#wxb').onclick=()=>openSheet('wx');$('#pwb').onclick=()=>openSheet('pw');
+$('#bHelp').onclick=()=>openSheet('help');$('#bMine').onclick=()=>openSheet('mine');$('#bSet').onclick=()=>openSheet('set');$('#wxb').onclick=()=>openSheet('wx');$('#pwb').onclick=()=>openSheet('pw');
 function hud(){$('#coinv').innerHTML='🪙 <b>'+fmt(S.coins)+'</b>';const L=lanes();
- $('#rate').textContent=fmt(perSec()*60)+' /min • '+L+' lane'+(L>1?'s':'')+(S.prest?' • ⭐'+S.prest:'')+(S.gp?' • 🌟'+fmt(S.gp):'');
+ $('#rate').textContent=fmt(perSec()*60)+' /min • '+L+' lane'+(L>1?'s':'')+(S.prest?' • ⭐'+S.prest:'')+(S.gp?' • 🌟'+fmt(S.gp):'')+(boostOn()?' • ⚡2× '+Math.ceil((S.boostUntil-Date.now())/1000)+'s':'');
  $('#bPr').classList.toggle('glow',S.run>=presReq());
  if(S.disc<V.length){$('#resl').textContent='🐝 Next: '+(V[S.disc].x?'Experimental':'???');$('#resb').style.width=S.res/resNeed()*100+'%'}else $('#resl').textContent='🏆 All varieties found';
  const pb=$('#pwb');pb.textContent='⚡'+fmt(PW.sup).replace('.00','')+'/'+fmt(PW.dem).replace('.00','');pb.classList.toggle('low',PW.f<1);
  updWx();$('#wxb').textContent=(S.wxOn?WXT[WX.type].i:'🚫')+' '+WX.temp+'°F';
  refreshSheet();if(tool==='build')renderPicker()}
+
+/* ================= BONUS DRONES ================= */
+let droneT=60+Math.random()*60;
+function droneStep(dt){if(M||document.hidden)return;droneT-=dt;if(droneT<=0){droneT=70+Math.random()*130;spawnDrone()}}
+function spawnDrone(){const wr=$('#wrap').getBoundingClientRect();if(!wr.width)return;const d=document.createElement('button');d.className='drone';d.innerHTML='<span class="db">🛸<i>🎁</i></span>';
+ const ltr=Math.random()<.5;d.style.top=(wr.height*(.08+Math.random()*.5))+'px';d.style.left=(ltr?-70:wr.width+10)+'px';$('#wrap').appendChild(d);
+ requestAnimationFrame(()=>requestAnimationFrame(()=>{d.style.transform='translateX('+((wr.width+90)*(ltr?1:-1))+'px)'}));
+ const kill=setTimeout(()=>d.remove(),10500);
+ d.addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();if(d.disabled)return;clearTimeout(kill);droneReward(d)})}
+function droneReward(d){const r=Math.random(),cash=m=>{const g=Math.max(100,perSec()*m);earn(g);return'🪙 '+fmt(g)};let msg;
+ if(r<.35)msg=cash(90);
+ else if(r<.55){S.boostUntil=Date.now()+60000;msg='⚡ 2× belts and growth for 60s!'}
+ else if(r<.7){const n=20+Math.floor(Math.random()*30);S.manure=(S.manure||0)+n;msg='💩 '+n+' manure'}
+ else if(r<.85){const n=1+Math.floor(Math.random()*2);S.rare=(S.rare||0)+n;msg='✨ '+n+' Rare Seed'+(n>1?'s':'')}
+ else if(r<.95&&S.disc>1){const t=S.disc-1;S.seeds[t]+=10;msg='🌰 10 '+V[t].n+' seeds'}
+ else if(S.prest>0){S.gp++;msg='🌟 1 Golden Pepper!'}else msg=cash(180);
+ d.disabled=true;d.innerHTML='<span class="db">✨</span>';const m=getComputedStyle(d).transform;d.style.transition='none';d.style.transform=m;setTimeout(()=>d.remove(),500);
+ if(navigator.vibrate)try{navigator.vibrate(25)}catch(_){}toast('🛸 Bonus drone: '+msg);save()}
+
+/* ================= MINES ================= */
+const MW=48,MH=150,MS=10;
+const MTI=[null,{n:'Dirt',h:1,c:'#7a5230'},{n:'Stone',h:2.5,c:'#66666e'},{n:'Copper',h:3,c:'#66666e',o:'#e08a3a',v:40,k:'copper'},{n:'Iron',h:4.5,c:'#5d5d65',o:'#e3d2b8',v:150,k:'iron'},
+ {n:'Gold',h:6,c:'#55555c',o:'#ffd84a',v:700,k:'gold'},{n:'Gem',h:8,c:'#4a4a52',o:'#55f2ff',v:2000,k:'gem'},{n:'Fossil Seed',h:6,c:'#5c4c3c',o:'#f5ead0',v:3000,k:'fossil'},{n:'Bedrock',h:Infinity,c:'#1b1b1e'},{n:'Grass',h:1,c:'#7a5230',g:1}];
+const ET={slime:{n:'Slime',hp:3,dmg:1,c:'#5fd35f',w:.9,h:.7},bat:{n:'Cave Bat',hp:2,dmg:1,c:'#8a6bc4',w:.8,h:.5},blob:{n:'Rot Blob',hp:8,dmg:2,c:'#b04dff',w:1.1,h:1}};
+const MUP=[{id:'pick',name:'Pickaxe',icon:'⛏️',desc:l=>'mining power ×'+fmt2(Math.pow(1.4,l))},{id:'sword',name:'Sword',icon:'🗡️',desc:l=>'damage '+fmt2(Math.pow(1.5,l))},
+ {id:'armor',name:'Armor',icon:'🛡️',desc:l=>'max health '+(10+5*l)},{id:'lamp',name:'Lamp',icon:'🔦',desc:l=>'light radius '+(5+1.5*l).toFixed(1)+' tiles'}];
+const mu=id=>(S.mu&&S.mu[id])||0,muCost=l=>Math.floor(500*Math.pow(2.1,l)),mHpMax=()=>10+5*mu('armor');
+const lootMult=()=>Math.max(1,V[S.disc-1].val/3)*Math.pow(1.5,S.prest);
+const oreOf=k=>MTI.find(q=>q&&q.k===k);
+let M=null,mlast=0,MTs=32,MWp=0,MHp=0;const mcv=$('#mcv'),mx=mcv.getContext('2d');
+function mSize(){MWp=innerWidth;MHp=innerHeight;const d=Math.min(2,devicePixelRatio||1);mcv.width=MWp*d;mcv.height=MHp*d;mcv.style.width=MWp+'px';mcv.style.height=MHp+'px';mx.setTransform(d,0,0,d,0,0);MTs=Math.max(28,Math.min(42,MWp/11))}
+function genMine(){const g=new Uint8Array(MW*MH),R=Math.random;
+ for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){let v=0;
+  if(x===0||x===MW-1||y===MH-1)v=8;else if(y<MS)v=0;else if(y===MS)v=9;else{const d=y-MS;v=d<4||R()<Math.max(.08,.55-d/50)?1:2;
+   const r=R();if(d>3&&r<.06)v=3;else if(d>18&&r<.1)v=4;else if(d>40&&r<.125)v=5;else if(d>65&&r<.135)v=6;else if(d>30&&r<.141)v=7}
+  g[y*MW+x]=v}
+ for(let i=0;i<20;i++){let x=2+R()*(MW-4),y=MS+6+R()*(MH-20);const n=60+R()*110;
+  for(let st=0;st<n;st++){const rad=1+R()*1.4;for(let a=-2;a<=2;a++)for(let b=-2;b<=2;b++){const cx=Math.round(x+a),cy=Math.round(y+b);if(a*a+b*b<=rad*rad&&cx>0&&cx<MW-1&&cy>MS+2&&cy<MH-1)g[cy*MW+cx]=0}
+   x=Math.max(2,Math.min(MW-3,x+R()*2-1));y=Math.max(MS+4,Math.min(MH-3,y+R()*1.6-.8))}}
+ return g}
+const mget=(x,y)=>(x<0||x>=MW||y<0||y>=MH)?8:M.g[y*MW+x];
+function boxHit(x,y,w,h){for(let tx=Math.floor(x);tx<=Math.floor(x+w-1e-6);tx++)for(let ty=Math.floor(y);ty<=Math.floor(y+h-1e-6);ty++)if(mget(tx,ty)!==0)return true;return false}
+function moveBox(o,w,h,dt,grav){o.og=false;if(grav)o.vy=Math.min(18,o.vy+30*dt);
+ let nx=o.x+o.vx*dt;o.hitW=false;if(boxHit(nx,o.y,w,h)){nx=o.vx>0?Math.floor(nx+w)-w-.001:Math.floor(nx)+1;o.vx=0;o.hitW=true}o.x=nx;
+ let ny=o.y+o.vy*dt;if(boxHit(o.x,ny,w,h)){if(o.vy>0){ny=Math.floor(ny+h)-h-.001;o.og=true}else ny=Math.floor(ny)+1;o.vy=0}o.y=ny}
+function mfl(txt,col,x,y){if(!M)return;const p=M.p;M.fl.push({x:x??p.x+.35,y:y??p.y-.3,t:1.4,txt,col:col||'#fff'})}
+function enterMine(){closeSheet();M={g:genMine(),p:{x:MW/2,y:MS-2,vx:0,vy:0,hp:mHpMax(),inv:0,face:1,hurtT:9},en:[],bag:{},dmg:{},dig:null,keys:{},spT:3,fl:[],atkT:0,swing:0,cam:{x:0,y:0}};
+ $('#mine').style.display='block';mSize();mlast=performance.now();requestAnimationFrame(mloop)}
+function bagVal(){let c=0;for(const k in M.bag)c+=oreOf(k).v*M.bag[k]*lootMult();return c}
+function exitMine(){if(!M)return;let coins=bagVal(),gems=M.bag.gem||0,fos=M.bag.fossil||0;const parts=Object.keys(M.bag).map(k=>M.bag[k]+' '+oreOf(k).n);
+ if(coins>0)earn(coins);S.rare=(S.rare||0)+gems;
+ if(fos&&S.disc<V.length){S.res+=fos;while(S.disc<V.length&&S.res>=resNeed()){S.res-=resNeed();S.disc++;S.seeds[S.disc-1]+=5;toast('🎉 Fossil seeds revealed a new variety: '+V[S.disc-1].n+'!')}}
+ M=null;$('#mine').style.display='none';
+ setTimeout(()=>toast(parts.length?'⛏️ Sold '+parts.join(', ')+' for 🪙'+fmt(coins)+(gems?' • ✨+'+gems+' Rare Seeds':'')+(fos?' • 🦴 +'+fos+' research':''):'⛏️ Back from the mines'),fos?2600:0);save()}
+function mDie(){M.bag={};M.en=[];const p=M.p;p.x=MW/2;p.y=MS-2;p.vx=p.vy=0;p.hp=mHpMax();p.inv=2;toast('💀 You fainted! Your bag was lost. Back at the surface.')}
+function spawnEn(d){const p=M.p;for(let tr=0;tr<30;tr++){const x=Math.floor(p.x+(Math.random()*26-13)),y=Math.floor(p.y+(Math.random()*18-9));
+  if(Math.abs(x-p.x)<6&&Math.abs(y-p.y)<5)continue;if(y<=MS+1||mget(x,y)!==0||mget(x,y-1)!==0)continue;
+  const ty=d>40&&Math.random()<.35?'blob':d>12&&Math.random()<.45?'bat':'slime',b=ET[ty],sc=1+d/50;
+  M.en.push({t:ty,x:x+.05,y:y+1-b.h-.01,vx:0,vy:0,hp:b.hp*sc,mx:b.hp*sc,dmg:Math.ceil(b.dmg*(1+d/80)),cd:Math.random(),hit:0});return}}
+function mAct(wx,wy){const p=M.p,pcx=p.x+.35,pcy=p.y+.75;M.swing=.2;if(wx<pcx)p.face=-1;else p.face=1;
+ for(const e of M.en){const b=ET[e.t];if(wx>=e.x-.4&&wx<=e.x+b.w+.4&&wy>=e.y-.4&&wy<=e.y+b.h+.4){if(Math.hypot(e.x+b.w/2-pcx,e.y+b.h/2-pcy)>3.2){mfl('Too far','#fbb');return}
+   const dm=Math.pow(1.5,mu('sword'));e.hp-=dm;e.hit=.2;e.vx=Math.sign(e.x-p.x)*5;e.vy=-4;mfl('-'+fmt2(dm).replace('.00',''),'#ff8a7a',e.x+b.w/2,e.y);
+   if(e.hp<=0){M.en.splice(M.en.indexOf(e),1);const g=8*lootMult()*(e.t==='blob'?3:1);earn(g);mfl('+🪙'+fmt(g),'#ffd84a',e.x,e.y);misProg('kill',e.t,1)}return}}
+ const tx=Math.floor(wx),ty=Math.floor(wy),v=mget(tx,ty);if(!v||v===8)return;
+ if(Math.hypot(tx+.5-pcx,ty+.5-pcy)>3.6){mfl('Too far','#fbb');M.dig=null;return}
+ const key=tx+','+ty;M.dmg[key]=(M.dmg[key]||0)+Math.pow(1.4,mu('pick'));
+ if(M.dmg[key]>=MTI[v].h){M.g[ty*MW+tx]=0;delete M.dmg[key];const o=MTI[v];if(o.k){M.bag[o.k]=(M.bag[o.k]||0)+1;mfl('+'+o.n,o.o,tx+.5,ty);misProg('mine',o.k,1)}}}
+function mstep(dt,now){const p=M.p,k=M.keys;p.vx=((k.R?1:0)-(k.L?1:0))*5;if(p.vx)p.face=Math.sign(p.vx);
+ if(k.J&&p.og)p.vy=-11.5;moveBox(p,.7,1.5,dt,true);if(p.hitW&&p.og&&p.vx)p.vy=-8.5;
+ p.inv=Math.max(0,p.inv-dt);p.hurtT+=dt;if(p.hurtT>5)p.hp=Math.min(mHpMax(),p.hp+dt*.6);
+ const depth=Math.max(0,Math.floor(p.y+1.5-MS));misProg('depth',null,depth,true);
+ M.atkT=Math.max(0,M.atkT-dt);M.swing=Math.max(0,M.swing-dt);if(M.dig&&M.atkT<=0){M.atkT=.25;mAct(M.dig.x+M.cam.x/MTs,M.dig.y+M.cam.y/MTs)}
+ M.spT-=dt;if(M.spT<=0){M.spT=2.5;if(depth>2&&M.en.length<4+Math.min(6,depth/15))spawnEn(depth)}
+ for(let i=M.en.length-1;i>=0;i--){const e=M.en[i],b=ET[e.t],dx=(p.x+.35)-(e.x+b.w/2),dy=(p.y+.75)-(e.y+b.h/2);e.hit=Math.max(0,e.hit-dt);
+  if(Math.abs(dx)>32||Math.abs(dy)>24){M.en.splice(i,1);continue}
+  if(e.t==='bat'){if(e.hit<=0){const L=Math.hypot(dx,dy)||1;e.vx=dx/L*2.6;e.vy=dy/L*2.6+Math.sin(now/180)*1.2}moveBox(e,b.w,b.h,dt,false)}
+  else if(e.t==='slime'){e.cd-=dt;if(e.og&&e.cd<=0&&Math.abs(dx)<14){e.cd=1.2;e.vy=-8;e.vx=Math.sign(dx)*3.2}else if(e.og&&e.hit<=0)e.vx*=.8;moveBox(e,b.w,b.h,dt,true)}
+  else{if(e.hit<=0)e.vx=Math.abs(dx)<16?Math.sign(dx)*1.6:0;moveBox(e,b.w,b.h,dt,true);if(e.hitW&&e.og)e.vy=-7}
+  if(p.inv<=0&&e.x<p.x+.7&&e.x+b.w>p.x&&e.y<p.y+1.5&&e.y+b.h>p.y){p.hp-=e.dmg;p.inv=1;p.hurtT=0;p.vy=-6;mfl('-'+e.dmg+' ❤️','#ff6a5a');if(navigator.vibrate)try{navigator.vibrate(40)}catch(_){}if(p.hp<=0){mDie();return}}}
+ for(let i=M.fl.length-1;i>=0;i--){const f=M.fl[i];f.t-=dt;f.y-=dt*.8;if(f.t<=0)M.fl.splice(i,1)}}
+function mdraw(now){const p=M.p,T2=MTs,W2=MWp,H2=MHp;let cx=(p.x+.35)*T2-W2/2,cy=(p.y+.75)*T2-H2/2;cx=Math.max(0,Math.min(MW*T2-W2,cx));cy=Math.max(-4*T2,Math.min(MH*T2-H2,cy));M.cam={x:cx,y:cy};
+ mx.fillStyle='#1d1610';mx.fillRect(0,0,W2,H2);const sky=MS*T2-cy;if(sky>0){const g=mx.createLinearGradient(0,0,0,sky);g.addColorStop(0,'#5fb3ff');g.addColorStop(1,'#cdeeff');mx.fillStyle=g;mx.fillRect(0,0,W2,sky)}
+ const x0=Math.max(0,Math.floor(cx/T2)),x1=Math.min(MW-1,Math.floor((cx+W2)/T2)),y0=Math.max(0,Math.floor(cy/T2)),y1=Math.min(MH-1,Math.floor((cy+H2)/T2));
+ for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const v=M.g[y*MW+x];if(!v)continue;const t=MTI[v],sx=x*T2-cx,sy=y*T2-cy;mx.fillStyle=t.c;mx.fillRect(sx,sy,T2+.6,T2+.6);
+  mx.fillStyle='#0002';mx.fillRect(sx,sy+T2*.82,T2,T2*.18);
+  if(t.g){mx.fillStyle='#4fae3a';mx.fillRect(sx,sy,T2+.6,T2*.28)}
+  if(t.o){mx.fillStyle=t.o;if(t.k==='gem'){mx.beginPath();mx.moveTo(sx+T2*.5,sy+T2*.18);mx.lineTo(sx+T2*.78,sy+T2*.5);mx.lineTo(sx+T2*.5,sy+T2*.82);mx.lineTo(sx+T2*.22,sy+T2*.5);mx.fill()}
+   else if(t.k==='fossil'){mx.beginPath();mx.ellipse(sx+T2*.5,sy+T2*.5,T2*.28,T2*.17,-.5,0,7);mx.fill();mx.fillStyle='#c84a2a';mx.beginPath();mx.arc(sx+T2*.5,sy+T2*.5,T2*.08,0,7);mx.fill()}
+   else for(const[a,b]of[[.28,.3],[.66,.38],[.42,.68],[.74,.72]]){mx.beginPath();mx.arc(sx+a*T2,sy+b*T2,T2*.09,0,7);mx.fill()}}
+  const dm=M.dmg[x+','+y];if(dm){const f=Math.min(1,dm/t.h);mx.strokeStyle='#000b';mx.lineWidth=2;mx.beginPath();mx.moveTo(sx+T2*.5,sy+T2*.5);mx.lineTo(sx+T2*(.5-.4*f),sy+T2*(.5-.3*f));mx.moveTo(sx+T2*.5,sy+T2*.5);mx.lineTo(sx+T2*(.5+.35*f),sy+T2*(.5-.2*f));mx.moveTo(sx+T2*.5,sy+T2*.5);mx.lineTo(sx+T2*(.5+.1*f),sy+T2*(.5+.4*f));mx.stroke()}}
+ for(const e of M.en){const b=ET[e.t],sx=e.x*T2-cx,sy=e.y*T2-cy,w=b.w*T2,h=b.h*T2;mx.fillStyle=e.hit>0?'#fff':b.c;
+  if(e.t==='bat'){const fl=Math.sin(now/60)*h*.6;mx.beginPath();mx.moveTo(sx,sy+h*.4-fl);mx.lineTo(sx+w*.5,sy+h*.5);mx.lineTo(sx+w,sy+h*.4-fl);mx.lineTo(sx+w*.5,sy+h);mx.closePath();mx.fill();mx.beginPath();mx.arc(sx+w*.5,sy+h*.55,h*.35,0,7);mx.fill()}
+  else{mx.beginPath();mx.ellipse(sx+w/2,sy+h*.55,w/2,h*.48,0,0,7);mx.fill();if(e.t==='blob'){mx.fillStyle='#7a1fc4';for(const[a,c]of[[.3,.4],[.65,.6],[.45,.75]]){mx.beginPath();mx.arc(sx+a*w,sy+c*h,w*.08,0,7);mx.fill()}}}
+  mx.fillStyle='#fff';const ey=sy+h*.45;mx.beginPath();mx.arc(sx+w*.38,ey,w*.09,0,7);mx.arc(sx+w*.62,ey,w*.09,0,7);mx.fill();mx.fillStyle='#000';mx.beginPath();mx.arc(sx+w*.38+Math.sign((p.x-e.x))*w*.03,ey,w*.045,0,7);mx.arc(sx+w*.62+Math.sign((p.x-e.x))*w*.03,ey,w*.045,0,7);mx.fill();
+  if(e.hp<e.mx){mx.fillStyle='#000a';mx.fillRect(sx,sy-6,w,4);mx.fillStyle='#e5483b';mx.fillRect(sx,sy-6,w*Math.max(0,e.hp/e.mx),4)}}
+ {const sx=p.x*T2-cx,sy=p.y*T2-cy,w=.7*T2,h=1.5*T2;if(!(p.inv>0&&Math.floor(now/80)%2)){
+  mx.fillStyle='#2d5fa8';mx.fillRect(sx+w*.12,sy+h*.42,w*.76,h*.4);mx.fillStyle='#3b2a1a';mx.fillRect(sx+w*.12,sy+h*.82,w*.3,h*.18);mx.fillRect(sx+w*.58,sy+h*.82,w*.3,h*.18);
+  mx.fillStyle='#f1c27d';mx.beginPath();mx.arc(sx+w/2,sy+h*.3,w*.32,0,7);mx.fill();mx.fillStyle='#e8c25a';mx.fillRect(sx-w*.15,sy+h*.1,w*1.3,h*.06);mx.fillRect(sx+w*.15,sy-h*.02,w*.7,h*.14);
+  mx.fillStyle='#000';mx.beginPath();mx.arc(sx+w/2+p.face*w*.14,sy+h*.3,w*.05,0,7);mx.fill();
+  const ang=(M.swing>0?-1.2+M.swing*10:-.3)*p.face,hx=sx+w/2+p.face*w*.4,hy=sy+h*.55;mx.save();mx.translate(hx,hy);mx.rotate(ang);mx.strokeStyle='#8a5a2b';mx.lineWidth=3;mx.beginPath();mx.moveTo(0,0);mx.lineTo(p.face*w*.7,-h*.2);mx.stroke();
+  mx.strokeStyle='#bfc6cc';mx.lineWidth=4;mx.beginPath();mx.moveTo(p.face*w*.55,-h*.36);mx.quadraticCurveTo(p.face*w*.85,-h*.25,p.face*w*.75,-h*.05);mx.stroke();mx.restore()}}
+ const dep=(p.y+1.5-MS);if(dep>2){const a=Math.min(.94,(dep-2)/12*.94),px=(p.x+.35)*T2-cx,py=(p.y+.75)*T2-cy,Rr=(5+1.5*mu('lamp'))*T2,g=mx.createRadialGradient(px,py,Rr*.25,px,py,Rr);
+  g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,'+a+')');mx.fillStyle=g;mx.fillRect(0,0,W2,H2)}
+ for(const f of M.fl){mx.globalAlpha=Math.min(1,f.t);mx.font='900 14px system-ui';mx.textAlign='center';mx.lineWidth=3;mx.strokeStyle='#000a';mx.strokeText(f.txt,f.x*T2-cx,f.y*T2-cy);mx.fillStyle=f.col;mx.fillText(f.txt,f.x*T2-cx,f.y*T2-cy);mx.globalAlpha=1}
+ $('#mhp').textContent='❤️ '+Math.ceil(p.hp)+'/'+mHpMax();$('#mdp').textContent='⬇️ '+Math.max(0,Math.floor(dep))+'m';$('#mbag').textContent='🎒 🪙'+fmt(bagVal())}
+function mloop(now){if(!M)return;const dt=Math.min(.05,(now-mlast)/1000);mlast=now;mstep(dt,now);if(M)mdraw(now);requestAnimationFrame(mloop)}
+mcv.addEventListener('pointerdown',e=>{if(!M)return;e.preventDefault();try{mcv.setPointerCapture(e.pointerId)}catch(_){}M.dig={x:e.clientX/MTs,y:e.clientY/MTs};M.atkT=0;$('#mhint').style.display='none'});
+mcv.addEventListener('pointermove',e=>{if(M&&M.dig)M.dig={x:e.clientX/MTs,y:e.clientY/MTs}});
+['pointerup','pointercancel'].forEach(ev=>mcv.addEventListener(ev,()=>{if(M)M.dig=null}));
+[['mL','L'],['mR','R'],['mJ','J']].forEach(([id,kk])=>{const b=$('#'+id);b.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();if(M)M.keys[kk]=true;try{b.setPointerCapture(e.pointerId)}catch(_){}});
+ ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>b.addEventListener(ev,()=>{if(M)M.keys[kk]=false}))});
+$('#mexit').addEventListener('click',exitMine);
+addEventListener('keydown',e=>{if(!M)return;if(e.key==='ArrowLeft'||e.key==='a')M.keys.L=true;if(e.key==='ArrowRight'||e.key==='d')M.keys.R=true;if(e.key===' '||e.key==='ArrowUp'||e.key==='w')M.keys.J=true});
+addEventListener('keyup',e=>{if(!M)return;if(e.key==='ArrowLeft'||e.key==='a')M.keys.L=false;if(e.key==='ArrowRight'||e.key==='d')M.keys.R=false;if(e.key===' '||e.key==='ArrowUp'||e.key==='w')M.keys.J=false});
+addEventListener('resize',()=>{if(M)mSize()});
+/* ---- missions ---- */
+function newMission(){for(let i=0;i<12;i++){const m=newMission1();if(!(S.mis||[]).some(o=>o.txt===m.txt))return m}return newMission1()}
+function newMission1(){const n=S.misN||0,R=Math.random,sc=1+n*.15,ty=['mine','kill','depth'][Math.floor(R()*3)];let m;
+ if(ty==='mine'){const av=['copper','iron','gold','gem'].slice(0,Math.min(4,1+Math.floor(n/3))),o=av[Math.floor(R()*av.length)],need=Math.ceil({copper:12,iron:8,gold:5,gem:2}[o]*sc);m={ty,k:o,need,txt:'Mine '+need+' '+oreOf(o).n}}
+ else if(ty==='kill'){const es=['slime','bat','blob'].slice(0,Math.min(3,1+Math.floor(n/3))),e=es[Math.floor(R()*es.length)],need=Math.ceil({slime:6,bat:5,blob:3}[e]*sc);m={ty,k:e,need,txt:'Defeat '+need+' '+ET[e].n+'s'}}
+ else{const need=Math.min(MH-MS-3,Math.ceil(20+n*8));m={ty,need,txt:'Reach '+need+'m deep'}}
+ const rr=R();m.rw=rr<.15?{gp:1}:rr<.45?{rare:1+Math.floor(n/4)}:{coins:1};m.prog=0;return m}
+const rwTxt=rw=>rw.gp?'🌟 1 Golden Pepper':rw.rare?'✨ '+rw.rare+' Rare Seed'+(rw.rare>1?'s':''):'🪙 '+fmt(misCoins());
+const misCoins=()=>Math.floor(2000*(1+(S.misN||0)*.15)*lootMult());
+function misProg(ty,k,v,isMax){if(!S.mis)return;for(const m of S.mis){if(m.ty!==ty||(m.k&&m.k!==k))continue;const was=m.prog>=m.need;m.prog=isMax?Math.max(m.prog,v):m.prog+v;if(!was&&m.prog>=m.need)mfl('✅ '+m.txt,'#9ef07a')}}
 
 /* ---------------- loop ---------------- */
 let last=performance.now(),hudT=0;

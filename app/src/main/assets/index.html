@@ -135,7 +135,7 @@ const V=[
  {n:'Plasma Pod',shu:'9M',val:190000,g:12,c:'#19d3ff',sh:'lantern',x:1},
  {n:'Void Pepper',shu:'???',val:480000,g:14,c:'#8c5cff',sh:'reaper',x:1}
 ];
-const ING=[{n:'Soil Pellet',e:'🟫',v:1,c:'#9a6634'},{n:'Liquid Feed',e:'💧',v:3,c:'#3fa7ff'},{n:'Grow Tonic',e:'🧪',v:9,c:'#62c94a'},{n:'Vita-Pod',e:'💊',v:28,c:'#ff7ab8'},{n:'Gene Serum',e:'⚗️',v:90,c:'#a77cff'},{n:'Mutagen Core',e:'🔮',v:320,c:'#ff3fd0'}];
+const ING=[{n:'Soil Pellet',e:'🟫',v:2,c:'#9a6634'},{n:'Liquid Feed',e:'💧',v:6,c:'#3fa7ff'},{n:'Grow Tonic',e:'🧪',v:16,c:'#62c94a'},{n:'Vita-Pod',e:'💊',v:45,c:'#ff7ab8'},{n:'Gene Serum',e:'⚗️',v:130,c:'#a77cff'},{n:'Mutagen Core',e:'🔮',v:420,c:'#ff3fd0'}];
 const RCP={mixer:{in:{0:2},out:1,tm:2},brewer:{in:{1:2},out:2,tm:3},encap:{in:{2:1,1:2},out:3,tm:4},lab:{in:{3:1,2:1,1:2},out:4,tm:5},reactor:{in:{4:2,3:1,2:1},out:5,tm:7}};
 const needIng=v=>v<=1?0:v<=3?1:v<=5?2:v<=7?3:v<=10?4:5;
 const SINKS=new Set(['market','farmers','compost','sort','split','ugin']);
@@ -152,8 +152,8 @@ const BT={
  spray:{name:'Pesticide Sprayer',icon:'🧴',cost:200,col:'#7b3fa0',desc:'Protects farms in the 3×3 area around it from bacteria, but lowers their pepper quality.'},
  barn:{pw:1,name:'Cow Barn',icon:'🐄',cost:400,col:'#a8372a',out:1,desc:'Cows make 💩 manure. Belt it into farms for 2× growth (+30s per load, up to 150s).'},
  arm:{pw:1,name:'Robotic Arm',icon:'🦾',cost:150,col:'#46505f',out:1,desc:'Grabs items from the tile behind it and drops them on the tile its arrow points at: belts, storage, farms, market, anything.'},
- dock:{name:'Supply Dock',icon:'🚚',cost:500,col:'#2f6f8f',out:1,desc:'Trucks in free 🟫 Soil Pellets and puts them on its belt. Sell them as they are, or turn them into better ingredients.'},
- mixer:{name:'Feed Mixer',icon:'💧',cost:150,col:'#2d6aa0',out:1,desc:'Lasers 2 🟫 Soil Pellets off belts touching it → 💧 Liquid Feed.'},
+ dock:{lc:60,name:'Supply Dock',icon:'🚚',cost:500,col:'#2f6f8f',out:1,desc:'Trucks in free 🟫 Soil Pellets and puts them on its belt. Sell them as they are, or turn them into better ingredients.'},
+ mixer:{lc:80,name:'Feed Mixer',icon:'💧',cost:100,col:'#2d6aa0',out:1,desc:'Lasers 2 🟫 Soil Pellets off belts touching it → 💧 Liquid Feed.'},
  brewer:{name:'Tonic Brewer',icon:'🧪',cost:1200,col:'#3f8a33',out:1,desc:'2 💧 Liquid Feed → 🧪 Grow Tonic.'},
  encap:{pw:2,name:'Pod Press',icon:'💊',cost:8000,col:'#a8466e',out:1,desc:'1 🧪 Grow Tonic + 2 💧 Liquid Feed → 💊 Vita-Pod.'},
  lab:{pw:4,name:'Gene Lab',icon:'⚗️',cost:60000,col:'#6a4fa8',out:1,desc:'1 💊 Vita-Pod + 1 🧪 Grow Tonic + 2 💧 Liquid Feed → ⚗️ Gene Serum.'},
@@ -173,14 +173,14 @@ const PERM=[
  {id:'ptap',name:'Strong Hands',icon:'👆',desc:l=>'tap power ×'+fmt2(Math.pow(1.3,l)),cost:l=>Math.ceil(1*Math.pow(1.5,l))},
  {id:'pstack',name:'Big Harvest',icon:'🧺',desc:l=>'+'+l+' peppers per stack',cost:l=>Math.ceil(3*Math.pow(1.7,l))},
  {id:'pbelt',name:'Express Belts',icon:'⏩',desc:l=>'belt speed ×'+fmt2(Math.pow(1.1,l)),cost:l=>Math.ceil(2*Math.pow(1.5,l))},
- {id:'pcash',name:'Head Start',icon:'💰',desc:l=>'start each run with 🪙'+fmt(150*Math.pow(5,l)),cost:l=>Math.ceil(1*Math.pow(1.6,l))},
+ {id:'pcash',name:'Head Start',icon:'💰',desc:l=>'start each run with 🪙'+fmt(300*Math.pow(5,l)),cost:l=>Math.ceil(1*Math.pow(1.6,l))},
  {id:'poff',name:'Night Shift',icon:'🌙',desc:l=>'offline earnings '+Math.min(100,50+10*l)+'%',cost:l=>Math.ceil(2*Math.pow(1.6,l)),max:5}];
 const pm=id=>(S.perm&&S.perm[id])||0;
 const stackN=()=>2+(S.up.seedq||0)+pm('pstack');
 const gpGain=()=>Math.max(3,Math.floor(3*Math.sqrt(S.run/presReq())));
 const UP=[
  {id:'seedq',name:'Seed Genetics',icon:'🧬',desc:l=>(2+l)+' peppers per stack, +'+3*l+' quality, value ×'+fmt2(Math.pow(1.08,l))+', '+fmt2(Math.pow(1.2,l))+'× work per seed',cost:l=>300*Math.pow(2.2,l),max:1e9},
- {id:'speed',name:'Belt Speed',icon:'⏩',desc:l=>(1+.2*l).toFixed(1)+' tiles/s',cost:l=>60*Math.pow(1.8,l),max:1e9},
+ {id:'speed',name:'Belt Speed',icon:'⏩',desc:l=>(1.4+.2*l).toFixed(1)+' tiles/s',cost:l=>60*Math.pow(1.8,l),max:1e9},
  {id:'fert',name:'Fertilizer',icon:'💩',cur:'m',desc:l=>'grow speed ×'+fmt2(1/Math.pow(.88,l))+' (paid in pasture manure)',cost:l=>Math.floor(15*Math.pow(1.55,l)),max:1e9},
  {id:'plots',name:'More Plots',icon:'🪴',desc:l=>(2+l)+' plots per farm',cost:l=>150*Math.pow(2.4,l),max:8},
  {id:'soil',name:'Rich Soil',icon:'🟫',desc:l=>'base quality '+Math.min(100,50+4*l),cost:l=>100*Math.pow(1.9,l),max:1e9},
@@ -195,7 +195,7 @@ const UP=[
 /* ---------------- state ---------------- */
 function fresh(){const tiles={},put=(x,y,o)=>tiles[x+','+y]=o;
  put(27,0,{k:'dock',d:1});for(let y=1;y<15;y++)put(27,y,{k:'belt',d:1});put(27,15,{k:'market',d:1});
- return{v:6,land:['3,0','3,1'],pland:[],dland:[],gp:0,perm:{},manure:0,rev:[],dem:V.map(()=>1),vs:V.map(()=>0),evT:200,ev:null,coins:150,run:0,total:0,prest:0,up:Object.fromEntries(UP.map(u=>[u.id,0])),disc:1,res:0,seeds:V.map(()=>0),
+ return{v:6,land:['3,0','3,1'],pland:[],dland:[],gp:0,perm:{},manure:0,rev:[],dem:V.map(()=>1),vs:V.map(()=>0),evT:200,ev:null,coins:300,run:0,total:0,prest:0,up:Object.fromEntries(UP.map(u=>[u.id,0])),disc:1,res:0,seeds:V.map(()=>0),
   tiles,rate:0,t:Date.now(),seen:false,zip:'',zipAsked:false,wxOn:true,ob:75,st:{sold:0,fed:0,cross:0,lost:0}}}
 function load(){try{const r=localStorage.getItem(SAVE_KEY);if(!r)return null;const d=JSON.parse(r),f=fresh();
  if(!d.land&&d.tiles){const nt={};for(const k in d.tiles){const[x,y]=k.split(',').map(Number);nt[(x+24)+','+y]=d.tiles[k]}d.tiles=nt;d.land=['3,0','3,1'];d.v=2}
@@ -212,7 +212,7 @@ const lanes=()=>Math.min(2+S.prest,6);
 const seedWork=()=>Math.pow(1.2,S.up.seedq||0);
 const LVX={dock:1.3,mixer:1.2,brewer:1.2,encap:1.2,lab:1.2,reactor:1.2,bank:1.3,farm:1.12,barn:1.1,arm:1.15,cross:1.15,taste:1.15,store:1.5,market:1.08,sort:1.25,split:1.25,solar:1.2,wind:1.2,bio:1.2};
 const crateN=t=>Math.pow(2,Math.floor((t.lv||0)/5));
-const lvl=t=>t.lv||0,lvM=t=>Math.pow(LVX[t.k]||1,lvl(t)),lvCost=t=>Math.floor(BT[t.k].cost*1.5*Math.pow(1.7,lvl(t)));
+const lvl=t=>t.lv||0,lvM=t=>Math.pow(LVX[t.k]||1,lvl(t)),lvCost=t=>Math.floor((BT[t.k].lc||BT[t.k].cost*1.5)*Math.pow(1.7,lvl(t)));
 const fPlots=t=>plots()+(t.hy?2:0)+Math.floor(lvl(t)/3);
 const autoRate=t=>.5*lvM(t)/seedWork();
 const ADULT=120,barnCap=t=>4+2*lvl(t);
@@ -225,7 +225,7 @@ function calcPower(){let s=0,d=0,mr=0;for(const k in S.tiles){const t=S.tiles[k]
  if(PW.f<1&&!lowPwWarned){lowPwWarned=true;toast('⚡ Not enough power! Machines are running slow. Buy a ⚡ Power Block and build generators.')}if(PW.f>=1)lowPwWarned=false}
 const pf=t=>pwUse(t)>0?PW.f:1;
 const boostOn=()=>Date.now()<(S.boostUntil||0);
-const speed=()=>(boostOn()?2:1)*(1+.2*S.up.speed)*Math.pow(1.1,pm('pbelt'));
+const speed=()=>(boostOn()?2:1)*(1.4+.2*S.up.speed)*Math.pow(1.1,pm('pbelt'));
 const growT=t=>V[t].g*Math.pow(.88,S.up.fert);
 const plots=()=>2+S.up.plots;
 const armP=l=>1.2*Math.pow(.85,l);
@@ -411,7 +411,7 @@ function updB(t,k,dt){const[x,y]=xy(k);
    else{t.ph=Math.min(1,(t.ph||0)+dt/(P*.5));if(t.ph>=1&&push(x,y,t.d,t.h)){t.h=null;t.ph=0;t.ret=1}}break}
   case'split':t.cd=Math.max(0,(t.cd||0)-dt*8*lvM(t)*pf(t));if(t.buf&&t.cd<=0){if(emit(t,x,y,t.buf,[t.d,(t.d+3)%4,(t.d+1)%4],true)){t.buf=null;t.cd=1}}break;
   case'bio':if(t.fuel>0)t.fuel=Math.max(0,t.fuel-dt);break;
-  case'dock':{const L=lanes(),r=.6*lvM(t);t.a=t.a||[];let bl=false;for(let l=0;l<L;l++){t.a[l]=(t.a[l]||0)+r*dt;if(t.a[l]<1)continue;if(push(x,y,t.d,{g:0,q:0,n:crateN(t)},l))t.a[l]-=1;else{t.a[l]=1;bl=true}}srcBlock(t,k,bl,x,y,dt);break}
+  case'dock':{const L=lanes(),r=1*lvM(t);t.a=t.a||[];let bl=false;for(let l=0;l<L;l++){t.a[l]=(t.a[l]||0)+r*dt;if(t.a[l]<1)continue;if(push(x,y,t.d,{g:0,q:0,n:crateN(t)},l))t.a[l]-=1;else{t.a[l]=1;bl=true}}srcBlock(t,k,bl,x,y,dt);break}
   case'mixer':case'brewer':case'encap':case'lab':case'reactor':{const r=RCP[t.k];t.inv=t.inv||{};t.out=t.out||[];
    const b=crateN(t);if(!t.cr&&t.out.length<4&&Object.keys(r.in).every(g=>(t.inv[g]||0)>=r.in[g]*b)){for(const g in r.in)t.inv[g]-=r.in[g]*b;t.cr=b;t.cp=0}
    if(t.cr){t.cp=(t.cp||0)+dt*lvM(t)*pf(t)*(boostOn()?2:1)/r.tm;if(t.cp>=1){t.out.push({g:r.out,q:0,n:t.cr});t.cr=0;t.cp=0}}
@@ -534,7 +534,7 @@ function drawB(k,t,now){const[x,y]=xy(k),b=BT[t.k],s=T*.92,px=x*T+T*.04,py=y*T+T
  else if(RCP[t.k]){const r=RCP[t.k],I=ING[r.out];ctx.fillStyle='#0005';rr(px+s*.12,py+s*.1,s*.76,s*.58,s*.1);ctx.fill();emo(I.e,cx,py+s*.38,s*.34);
   if(t.cr){ctx.strokeStyle=I.c;ctx.lineWidth=s*.06;ctx.beginPath();ctx.arc(cx,py+s*.38,s*.26,-Math.PI/2,-Math.PI/2+(t.cp||0)*Math.PI*2);ctx.stroke()}
   txt(Object.keys(r.in).map(g=>ING[g].e+((t.inv&&t.inv[g])||0)).join(''),cx,py+s*.85,Math.max(7,T*.13));if(t.out&&t.out.length>=4)txt('FULL',cx,py+s*.12,Math.max(7,T*.12),'#ff8a7a')}
- else if(t.k==='dock'){ctx.fillStyle='#1d4a60';rr(px+s*.08,py+s*.26,s*.84,s*.46,s*.08);ctx.fill();emo('🚚',cx+Math.sin(now/600)*s*.06,py+s*.46,s*.38);txt('🟫'+fmt2(.6*lvM(t)*lanes())+'/s',cx,py+s*.88,Math.max(7,T*.13))}
+ else if(t.k==='dock'){ctx.fillStyle='#1d4a60';rr(px+s*.08,py+s*.26,s*.84,s*.46,s*.08);ctx.fill();emo('🚚',cx+Math.sin(now/600)*s*.06,py+s*.46,s*.38);txt('🟫'+fmt2(1*lvM(t)*lanes())+'/s',cx,py+s*.88,Math.max(7,T*.13))}
  else if(t.k==='bank'&&t.tap){const pr=Math.min(1,(t.w||0)/seedWork()),rad=s*.3*(1-.12*(t.tp||0));
   ctx.fillStyle='#5a3618';ctx.beginPath();ctx.arc(cx,cy-s*.05,s*.36,0,7);ctx.fill();
   ctx.strokeStyle='#ffd84a';ctx.lineWidth=s*.07;ctx.beginPath();ctx.arc(cx,cy-s*.05,s*.36,-Math.PI/2,-Math.PI/2+pr*2*Math.PI);ctx.stroke();
@@ -809,7 +809,7 @@ function render(){const sh=$('#sheet');let h='';
   if(RCP[t.k]){const r=RCP[t.k];h+=`<h3>Recipe</h3><div class="stat"><span>${Object.keys(r.in).map(g=>r.in[g]+' '+ING[g].e+' '+ING[g].n).join(' + ')}</span><b>→ ${ING[r.out].e} ${ING[r.out].n}</b></div>
    <div class="stat"><span>Time</span><b>${fmt2(r.tm/lvM(t))}s</b></div><div class="stat"><span>Holding</span><b>${Object.keys(r.in).map(g=>ING[g].e+' '+((t.inv&&t.inv[g])||0)).join('  ')} • ready ${(t.out||[]).length}/4</b></div>
    <div class="stat"><span>Sells for</span><b>🪙 ${fmt(ING[r.out].v*vmult())} each</b></div><p>Its laser grabs ingredients off any belt touching it. Its arm drops the product on the belt its arrow points to. If that belt is full, it waits.</p>`}
-  if(t.k==='dock')h+=`<div class="stat"><span>Delivers</span><b>🟫 ${fmt2(.6*lvM(t))}/s per lane</b></div><div class="stat"><span>Pellet price</span><b>🪙 ${fmt(ING[0].v*vmult())}</b></div>`;
+  if(t.k==='dock')h+=`<div class="stat"><span>Delivers</span><b>🟫 ${fmt2(1*lvM(t))}/s per lane</b></div><div class="stat"><span>Pellet price</span><b>🪙 ${fmt(ING[0].v*vmult())}</b></div>`;
   if(t.k==='farm'){h+=`<h3>What each pepper needs</h3>`+[...Array(S.disc).keys()].map(i=>`<div class="stat"><span>${dot(i)}${V[i].n}</span><b>🌰 seed + ${ING[needIng(i)].e} ${ING[needIng(i)].n}</b></div>`).join('')+
    `<div class="stat"><span>Seeds waiting</span><b>${(t.sb||[]).length}</b></div><div class="stat"><span>Ingredients held</span><b>${Object.entries(t.inv||{}).filter(e=>e[1]>0).map(([g,c])=>ING[g].e+' '+c).join('  ')||'none'}</b></div>
    <p>The farm's laser grabs seeds and the right ingredient from belts touching it, plus 💩 manure for 2× growth. Its arm puts peppers on the belt its arrow points to.</p>`}
@@ -826,7 +826,7 @@ function render(){const sh=$('#sheet');let h='';
 const hydroCost=()=>Math.floor(1500*Math.pow(1.6,Object.values(S.tiles).filter(t=>t.k==='farm'&&t.hy).length));
 let resetArm=false;
 function infoStats(k){if(RCP[k]){const r=RCP[k],st=(a,b)=>`<div class="stat"><span>${a}</span><b>${b}</b></div>`;return st('Recipe',Object.keys(r.in).map(g=>r.in[g]+ING[g].e).join(' + ')+' → '+ING[r.out].e)+st('Product sells for','🪙 '+fmt(ING[r.out].v*vmult()))+st('Time',r.tm+'s')+(BT[k].pw?st('Power','⚡ '+BT[k].pw):st('Power','none'))}
- if(k==='dock')return`<div class="stat"><span>Delivers</span><b>🟫 0.6/s per lane, free</b></div>`;
+ if(k==='dock')return`<div class="stat"><span>Delivers</span><b>🟫 1/s per lane, free</b></div>`;
 const st=(a,b)=>`<div class="stat"><span>${a}</span><b>${b}</b></div>`;
  switch(k){
   case'bank':return st('Seeds per lane','~'+fmt2(.5/seedWork())+'/s at level 0')+st('Power','⚡ 2')+st('Belt lanes',lanes())+st('Bell seeds','Free, unlimited');
@@ -885,7 +885,7 @@ function act(a,v){const t=sheetKind==='b'?S.tiles[sheetArg]:null;
  else if(a==='cow'){const hd=t.herd||(t.herd=[ADULT]),c=cowCost(hd.length);if(hd.length>=barnCap(t)||S.coins<c)return;S.coins-=c;hd.push(ADULT);toast('🐄 New cow!')}
  else if(a==='cure'){const c=cureCost();if(S.coins<c)return;S.coins-=c;t.inf=0;toast('🧪 Farm cured')}
  save();render()}
-function prestige(){S.gp+=gpGain();S.prest++;S.coins=150*Math.pow(5,pm('pcash'));S.run=0;S.manure=0;for(const k in S.up)S.up[k]=0;S.seeds=V.map(()=>0);
+function prestige(){S.gp+=gpGain();S.prest++;S.coins=300*Math.pow(5,pm('pcash'));S.run=0;S.manure=0;for(const k in S.up)S.up[k]=0;S.seeds=V.map(()=>0);
  for(const k in S.tiles){const t=S.tiles[k];if(t.k==='farm'){t.pl=[];t.inf=0}delete t.q;delete t.c;delete t.buf;delete t.h;t.mq=0;t.fz=0;t.lv=0;t.sq=0;t.w=0;t.fuel=0;if(t.k==='barn')t.herd=[ADULT]}
  S.dem=V.map(()=>1);
  BI={};rebuild();save();toast('⭐ Prestige '+S.prest+'! Belts now carry '+lanes()+' lanes')}
